@@ -170,6 +170,12 @@ h3 {
   font-weight: 700;
 }
 
+.primary-button.large {
+  min-height: 42px;
+  padding: 0 16px;
+  white-space: nowrap;
+}
+
 .primary-button:hover {
   background: #148449;
 }
@@ -182,6 +188,29 @@ h3 {
   border-radius: 6px;
   background: #ffffff;
   color: #506070;
+  font-size: 13px;
+}
+
+.work-guide {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid #cfd7df;
+  border-radius: 8px;
+  background: #fffdf7;
+  color: #26323d;
+}
+
+.work-guide strong {
+  flex: 0 0 auto;
+  font-size: 14px;
+}
+
+.work-guide span {
+  color: #607080;
   font-size: 13px;
 }
 
@@ -339,6 +368,31 @@ pre.error {
   background: #f5f8fb;
   color: #506070;
   font-size: 13px;
+}
+
+.quick-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #b9d8c8;
+  border-radius: 8px;
+  background: #f1fbf5;
+}
+
+.quick-action strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #123323;
+  font-size: 17px;
+}
+
+.quick-action p {
+  margin: 0;
+  color: #3d6650;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .step-block {
@@ -525,5 +579,11 @@ tr:last-child td {
   .metric-grid,
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .quick-action,
+  .work-guide {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

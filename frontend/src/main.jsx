@@ -148,6 +148,13 @@ function App() {
     }));
   };
 
+  const updateSection = (section, values) => {
+    setForms((prev) => ({
+      ...prev,
+      [section]: { ...prev[section], ...values },
+    }));
+  };
+
   const changeTab = (tabId) => {
     const params = new URLSearchParams(window.location.search);
     if (tabId === 'dashboard') {
@@ -210,13 +217,13 @@ function App() {
         onRefresh={() => run('대시보드 새로고침', refreshDashboard)}
       />
     ),
-    inbound: <InboundView forms={forms} updateForm={updateForm} run={run} />,
-    inventory: <InventoryView forms={forms} updateForm={updateForm} run={run} setInventoryRows={setInventoryRows} />,
-    putaway: <PutawayView forms={forms} updateForm={updateForm} run={run} setPutawayRows={setPutawayRows} />,
-    outbound: <OutboundView forms={forms} updateForm={updateForm} run={run} />,
-    picking: <PickingView forms={forms} updateForm={updateForm} run={run} setPickingRows={setPickingRows} />,
-    shipping: <ShippingView forms={forms} updateForm={updateForm} run={run} />,
-    returns: <ReturnsView forms={forms} updateForm={updateForm} run={run} />,
+    inbound: <InboundView forms={forms} updateForm={updateForm} updateSection={updateSection} run={run} changeTab={changeTab} refreshDashboard={refreshDashboard} />,
+    inventory: <InventoryView forms={forms} updateForm={updateForm} run={run} setInventoryRows={setInventoryRows} changeTab={changeTab} />,
+    putaway: <PutawayView forms={forms} updateForm={updateForm} run={run} setPutawayRows={setPutawayRows} changeTab={changeTab} refreshDashboard={refreshDashboard} />,
+    outbound: <OutboundView forms={forms} updateForm={updateForm} updateSection={updateSection} run={run} changeTab={changeTab} />,
+    picking: <PickingView forms={forms} updateForm={updateForm} run={run} setPickingRows={setPickingRows} changeTab={changeTab} />,
+    shipping: <ShippingView forms={forms} updateForm={updateForm} run={run} changeTab={changeTab} />,
+    returns: <ReturnsView forms={forms} updateForm={updateForm} updateSection={updateSection} run={run} changeTab={changeTab} />,
   };
 
   return (
@@ -259,6 +266,7 @@ function App() {
         </header>
 
         <div className="toast">{loading ? '처리 중...' : toast}</div>
+        {activeTab !== 'dashboard' && <WorkGuide activeTab={activeTab} />}
 
         <section className="workspace">
           <div className="content-panel">{views[activeTab]}</div>
@@ -336,10 +344,67 @@ function Metric({ label, value }) {
   );
 }
 
-function InboundView({ forms, updateForm, run }) {
+function WorkGuide({ activeTab }) {
+  const guides = {
+    inbound: ['입고부터 시작합니다.', '상품이 창고에 들어왔다고 가정하고 입고를 완료하면 재고가 늘어납니다.'],
+    inventory: ['재고를 확인합니다.', '입고 확정 후 가용 재고가 늘었는지 확인합니다.'],
+    putaway: ['상품 위치를 확정합니다.', '입고된 상품을 실제 로케이션에 넣어 위치 재고를 만듭니다.'],
+    outbound: ['출고 요청을 처리합니다.', '주문이 들어오면 재고를 먼저 할당하고 피킹 작업을 만듭니다.'],
+    picking: ['현장 피킹을 완료합니다.', '출고할 상품을 작업자가 집었다고 기록합니다.'],
+    shipping: ['송장을 출력합니다.', '배송에 필요한 송장을 만들고 출력 상태를 변경합니다.'],
+    returns: ['반품을 검수합니다.', '재판매 가능한 상품이면 다시 재고로 복구합니다.'],
+  };
+  const guide = guides[activeTab];
+  if (!guide) return null;
+  return (
+    <div className="work-guide">
+      <strong>{guide[0]}</strong>
+      <span>{guide[1]}</span>
+    </div>
+  );
+}
+
+function InboundView({ forms, updateForm, updateSection, run, changeTab, refreshDashboard }) {
   const form = forms.inbound;
   return (
     <DomainPanel title="입고 처리" description="입고 지시를 만들고 실사 수량 기준으로 재고와 적치 작업을 생성합니다.">
+      <QuickAction
+        title="입고를 한 번에 완료"
+        description="입고 지시 생성, 실사 처리, 입고 확정을 순서대로 실행하고 재고 화면으로 이동합니다."
+        buttonLabel="입고 완료하고 재고 보기"
+        onClick={async () => {
+          const data = await run('입고 한번에 완료', async () => {
+            const created = await api('/inbound-orders', {
+              method: 'POST',
+              body: JSON.stringify({
+                warehouseId: Number(form.warehouseId),
+                supplierId: Number(form.supplierId),
+                scheduledDate: form.scheduledDate,
+                items: [{ skuId: Number(form.skuId), skuName: form.skuName, orderedQty: Number(form.orderedQty) }],
+              }),
+            });
+            const inboundOrderId = created.id;
+            const inboundItemId = created.items?.[0]?.id;
+            updateSection('inbound', {
+              inboundOrderId: String(inboundOrderId),
+              inboundItemId: String(inboundItemId),
+            });
+            await api(`/inbound-orders/${inboundOrderId}/receive`, {
+              method: 'PATCH',
+              body: JSON.stringify({ items: [{ inboundItemId, receivedQty: Number(form.receivedQty) }] }),
+            });
+            const confirmed = await api(`/inbound-orders/${inboundOrderId}/confirm`, {
+              method: 'PATCH',
+              body: JSON.stringify({ confirmedBy: Number(form.confirmedBy), memo: '관리자 콘솔 입고 확정' }),
+            });
+            updateSection('inventory', { warehouseId: form.warehouseId, skuId: form.skuId });
+            updateSection('putaway', { warehouseId: form.warehouseId });
+            await refreshDashboard();
+            return { created, confirmed };
+          });
+          if (data) changeTab('inventory');
+        }}
+      />
       <StepBlock number="1" title="입고 지시 만들기" hint="공급사에서 들어올 SKU와 예정 수량을 등록합니다.">
         <FormGrid>
           <SelectField label="입고 창고" value={form.warehouseId} onChange={(v) => updateForm('inbound', 'warehouseId', v)} options={warehouseOptions} />
@@ -389,7 +454,7 @@ function InboundView({ forms, updateForm, run }) {
   );
 }
 
-function InventoryView({ forms, updateForm, run, setInventoryRows }) {
+function InventoryView({ forms, updateForm, run, setInventoryRows, changeTab }) {
   const form = forms.inventory;
   return (
     <DomainPanel title="재고 조회" description="가용 재고, 할당 재고, 위치별 재고와 변경 이력을 확인합니다.">
@@ -410,6 +475,20 @@ function InventoryView({ forms, updateForm, run, setInventoryRows }) {
           <ActionButton onClick={() => run('재고 이력 조회', () => api(`/inventories/${form.inventoryId}/history`))}>이력 조회</ActionButton>
         </ActionRow>
       </StepBlock>
+      <QuickAction
+        title="재고 확인 후 적치로 이동"
+        description="현재 창고 재고를 조회하고, 입고로 만들어진 적치 작업을 처리하러 이동합니다."
+        buttonLabel="재고 확인하고 적치하기"
+        onClick={async () => {
+          const data = await run('재고 확인', async () => {
+            const rows = await api(`/inventories?warehouseId=${form.warehouseId}`);
+            setInventoryRows(rows);
+            if (rows?.[0]?.id) updateForm('inventory', 'inventoryId', String(rows[0].id));
+            return rows;
+          });
+          if (data) changeTab('putaway');
+        }}
+      />
       <StepBlock number="2" title="운영 조정하기" hint="실사 차이나 파손처럼 수동 보정이 필요한 경우에만 사용합니다.">
         <FormGrid>
           <Field label="조정 수량" value={form.adjustQty} onChange={(v) => updateForm('inventory', 'adjustQty', v)} />
@@ -426,10 +505,35 @@ function InventoryView({ forms, updateForm, run, setInventoryRows }) {
   );
 }
 
-function PutawayView({ forms, updateForm, run, setPutawayRows }) {
+function PutawayView({ forms, updateForm, run, setPutawayRows, changeTab, refreshDashboard }) {
   const form = forms.putaway;
   return (
     <DomainPanel title="적치 작업" description="입고 확정 후 생성된 작업을 시작하고 실제 위치에 적치합니다.">
+      <QuickAction
+        title="대기 적치를 한 번에 완료"
+        description="대기 중인 적치 작업을 찾아 작업 시작과 위치 확정을 이어서 실행합니다."
+        buttonLabel="적치 완료하고 출고로 이동"
+        onClick={async () => {
+          const data = await run('적치 한번에 완료', async () => {
+            const rows = await api(`/putaway-tasks?warehouseId=${form.warehouseId}&status=PENDING`);
+            const task = rows?.[0];
+            if (!task) throw new Error('대기 중인 적치 작업이 없습니다. 먼저 입고를 완료해주세요.');
+            updateForm('putaway', 'putawayTaskId', String(task.id));
+            await api(`/putaway-tasks/${task.id}/start`, {
+              method: 'PATCH',
+              body: JSON.stringify({ assignedTo: Number(form.assignedTo) }),
+            });
+            const confirmed = await api(`/putaway-tasks/${task.id}/confirm`, {
+              method: 'PATCH',
+              body: JSON.stringify({ confirmedLocation: form.confirmedLocation }),
+            });
+            setPutawayRows([]);
+            await refreshDashboard();
+            return confirmed;
+          });
+          if (data) changeTab('outbound');
+        }}
+      />
       <StepBlock number="1" title="대기 작업 찾기" hint="입고 확정 후 생긴 적치 작업을 먼저 조회합니다.">
         <FormGrid>
           <SelectField label="작업 창고" value={form.warehouseId} onChange={(v) => updateForm('putaway', 'warehouseId', v)} options={warehouseOptions} />
@@ -464,10 +568,33 @@ function PutawayView({ forms, updateForm, run, setPutawayRows }) {
   );
 }
 
-function OutboundView({ forms, updateForm, run }) {
+function OutboundView({ forms, updateForm, updateSection, run, changeTab }) {
   const form = forms.outbound;
   return (
     <DomainPanel title="출고 처리" description="출고 지시를 만들고 재고 할당 후 피킹 작업을 생성합니다.">
+      <QuickAction
+        title="출고를 한 번에 할당"
+        description="출고 지시를 만들고 재고 할당까지 실행합니다. 할당이 끝나면 피킹 작업이 생깁니다."
+        buttonLabel="출고 할당하고 피킹으로 이동"
+        onClick={async () => {
+          const data = await run('출고 한번에 할당', async () => {
+            const created = await api('/outbound-orders', {
+              method: 'POST',
+              body: JSON.stringify({
+                warehouseId: Number(form.warehouseId),
+                orderId: `${form.orderId}-${Date.now()}`,
+                items: [{ skuId: Number(form.skuId), requestedQty: Number(form.requestedQty), locationCode: form.locationCode }],
+              }),
+            });
+            updateSection('outbound', { outboundOrderId: String(created.id) });
+            updateSection('shipping', { outboundOrderId: String(created.id) });
+            updateSection('returns', { outboundOrderId: String(created.id) });
+            const allocated = await api(`/outbound-orders/${created.id}/allocate`, { method: 'PATCH' });
+            return { created, allocated };
+          });
+          if (data) changeTab('picking');
+        }}
+      />
       <StepBlock number="1" title="출고 지시 만들기" hint="주문 기준으로 어떤 SKU를 어느 위치에서 피킹할지 등록합니다.">
         <FormGrid>
           <SelectField label="출고 창고" value={form.warehouseId} onChange={(v) => updateForm('outbound', 'warehouseId', v)} options={warehouseOptions} />
@@ -508,10 +635,34 @@ function OutboundView({ forms, updateForm, run }) {
   );
 }
 
-function PickingView({ forms, updateForm, run, setPickingRows }) {
+function PickingView({ forms, updateForm, run, setPickingRows, changeTab }) {
   const form = forms.picking;
   return (
     <DomainPanel title="피킹 작업" description="출고 할당 후 생성된 피킹 작업을 조회하고 완료합니다.">
+      <QuickAction
+        title="피킹을 한 번에 완료"
+        description="열린 피킹 웨이브와 작업을 찾아 담당 작업자 기준으로 완료 처리합니다."
+        buttonLabel="피킹 완료하고 송장으로 이동"
+        onClick={async () => {
+          const data = await run('피킹 한번에 완료', async () => {
+            const waves = await api(`/picking-waves?warehouseId=${form.warehouseId}&status=OPEN`);
+            const wave = waves?.[0];
+            if (!wave) throw new Error('열린 피킹 웨이브가 없습니다. 먼저 출고 할당을 완료해주세요.');
+            updateForm('picking', 'pickingWaveId', String(wave.id));
+            const tasks = await api(`/picking-waves/${wave.id}/tasks`);
+            const task = tasks?.[0];
+            if (!task) throw new Error('피킹 작업이 없습니다.');
+            updateForm('picking', 'pickingTaskId', String(task.id));
+            const picked = await api(`/picking-tasks/${task.id}/pick`, {
+              method: 'PATCH',
+              body: JSON.stringify({ assignedTo: Number(form.assignedTo) }),
+            });
+            setPickingRows(waves);
+            return picked;
+          });
+          if (data) changeTab('shipping');
+        }}
+      />
       <StepBlock number="1" title="피킹 웨이브 확인" hint="출고 할당 후 열린 웨이브와 그 안의 작업 목록을 조회합니다.">
         <FormGrid>
           <SelectField label="작업 창고" value={form.warehouseId} onChange={(v) => updateForm('picking', 'warehouseId', v)} options={warehouseOptions} />
@@ -547,10 +698,34 @@ function PickingView({ forms, updateForm, run, setPickingRows }) {
   );
 }
 
-function ShippingView({ forms, updateForm, run }) {
+function ShippingView({ forms, updateForm, run, changeTab }) {
   const form = forms.shipping;
   return (
     <DomainPanel title="송장 출력" description="출고 지시에 대한 송장을 생성하고 출력 상태를 관리합니다.">
+      <QuickAction
+        title="송장 출력까지 완료"
+        description="송장을 만들고 출력 요청, 출력 완료 상태까지 순서대로 변경합니다."
+        buttonLabel="송장 완료하고 반품으로 이동"
+        onClick={async () => {
+          const data = await run('송장 한번에 완료', async () => {
+            const created = await api('/shipping-labels', {
+              method: 'POST',
+              body: JSON.stringify({
+                outboundOrderId: Number(form.outboundOrderId),
+                carrier: form.carrier,
+                receiverName: form.receiverName,
+                receiverPhone: form.receiverPhone,
+                receiverAddress: form.receiverAddress,
+              }),
+            });
+            updateForm('shipping', 'shippingLabelId', String(created.id));
+            await api(`/shipping-labels/${created.id}/print`, { method: 'POST' });
+            const printed = await api(`/shipping-labels/${created.id}/printed`, { method: 'PATCH' });
+            return { created, printed };
+          });
+          if (data) changeTab('returns');
+        }}
+      />
       <StepBlock number="1" title="송장 생성" hint="출고 지시와 수령인 정보를 기준으로 송장 데이터를 만듭니다.">
         <FormGrid>
           <Field label="출고 지시 번호" value={form.outboundOrderId} onChange={(v) => updateForm('shipping', 'outboundOrderId', v)} />
@@ -590,10 +765,42 @@ function ShippingView({ forms, updateForm, run }) {
   );
 }
 
-function ReturnsView({ forms, updateForm, run }) {
+function ReturnsView({ forms, updateForm, updateSection, run, changeTab }) {
   const form = forms.returns;
   return (
     <DomainPanel title="반품 처리" description="반품 실사 결과에 따라 재고 복구 또는 불량 이력을 기록합니다.">
+      <QuickAction
+        title="반품을 한 번에 완료"
+        description="반품 접수, 실사 처리, 검수 완료까지 실행하고 재고 복구 여부를 확인할 수 있게 합니다."
+        buttonLabel="반품 완료하고 재고 보기"
+        onClick={async () => {
+          const data = await run('반품 한번에 완료', async () => {
+            const created = await api('/return-orders', {
+              method: 'POST',
+              body: JSON.stringify({
+                outboundOrderId: Number(form.outboundOrderId),
+                warehouseId: Number(form.warehouseId),
+                reason: 'CUSTOMER_CHANGE',
+                items: [{ skuId: Number(form.skuId), skuName: form.skuName, requestedQty: Number(form.requestedQty) }],
+              }),
+            });
+            const returnOrderId = created.id;
+            const returnItemId = created.items?.[0]?.id;
+            updateSection('returns', {
+              returnOrderId: String(returnOrderId),
+              returnItemId: String(returnItemId),
+            });
+            await api(`/return-orders/${returnOrderId}/receive`, {
+              method: 'PATCH',
+              body: JSON.stringify({ items: [{ returnItemId, receivedQty: Number(form.receivedQty), condition: form.condition }] }),
+            });
+            const completed = await api(`/return-orders/${returnOrderId}/complete`, { method: 'PATCH' });
+            updateSection('inventory', { warehouseId: form.warehouseId, skuId: form.skuId });
+            return { created, completed };
+          });
+          if (data) changeTab('inventory');
+        }}
+      />
       <StepBlock number="1" title="반품 접수" hint="원 출고 지시를 기준으로 회수할 상품과 수량을 등록합니다.">
         <FormGrid>
           <Field label="출고 지시 번호" value={form.outboundOrderId} onChange={(v) => updateForm('returns', 'outboundOrderId', v)} />
@@ -636,6 +843,21 @@ function ReturnsView({ forms, updateForm, run }) {
         </ActionRow>
       </StepBlock>
     </DomainPanel>
+  );
+}
+
+function QuickAction({ title, description, buttonLabel, onClick }) {
+  return (
+    <section className="quick-action">
+      <div>
+        <strong>{title}</strong>
+        <p>{description}</p>
+      </div>
+      <button className="primary-button large" onClick={onClick}>
+        <ArrowRight size={16} />
+        {buttonLabel}
+      </button>
+    </section>
   );
 }
 

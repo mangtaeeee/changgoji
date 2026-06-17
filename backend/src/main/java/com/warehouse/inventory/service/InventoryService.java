@@ -9,6 +9,7 @@ import com.warehouse.inventory.repository.InventoryHistoryRepository;
 import com.warehouse.inventory.repository.InventoryRepository;
 import com.warehouse.inventory.service.dto.InventoryAdjustRequest;
 import com.warehouse.inventory.service.dto.InventoryResponse;
+import com.warehouse.inventory.service.dto.StockIncreaseCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,5 +42,64 @@ public class InventoryService {
             inventory.getId()
         ));
         return InventoryResponse.from(inventory);
+    }
+
+    @Transactional
+    public void increaseStock(StockIncreaseCommand command, ChangeType changeType) {
+        Inventory inventory = inventoryRepository.findByWarehouseIdAndSkuId(command.warehouseId(), command.skuId())
+            .orElseGet(() -> inventoryRepository.save(
+                Inventory.create(command.warehouseId(), command.skuId(), command.skuName(), 0)
+            ));
+        int beforeQty = inventory.getAvailableQty();
+        inventory.increase(command.qty());
+        saveHistory(inventory, changeType, beforeQty, inventory.getAvailableQty(), command.qty(), command.referenceId());
+    }
+
+    @Transactional
+    public void allocateStock(Long warehouseId, Long skuId, int qty, Long referenceId) {
+        Inventory inventory = getInventoryEntity(warehouseId, skuId);
+        int beforeQty = inventory.getAvailableQty();
+        inventory.allocate(qty);
+        saveHistory(inventory, ChangeType.ALLOCATE, beforeQty, inventory.getAvailableQty(), -qty, referenceId);
+    }
+
+    @Transactional
+    public void shipStock(Long warehouseId, Long skuId, int qty, Long referenceId) {
+        Inventory inventory = getInventoryEntity(warehouseId, skuId);
+        int beforeQty = inventory.getAllocatedQty();
+        inventory.ship(qty);
+        saveHistory(inventory, ChangeType.OUTBOUND, beforeQty, inventory.getAllocatedQty(), -qty, referenceId);
+    }
+
+    @Transactional
+    public void releaseStock(Long warehouseId, Long skuId, int qty, Long referenceId) {
+        Inventory inventory = getInventoryEntity(warehouseId, skuId);
+        int beforeQty = inventory.getAvailableQty();
+        inventory.release(qty);
+        saveHistory(inventory, ChangeType.RELEASE, beforeQty, inventory.getAvailableQty(), qty, referenceId);
+    }
+
+    @Transactional
+    public void recordDefectiveReturn(Long warehouseId, Long skuId, Long referenceId) {
+        Inventory inventory = getInventoryEntity(warehouseId, skuId);
+        saveHistory(inventory, ChangeType.DEFECTIVE_RETURN, inventory.getAvailableQty(), inventory.getAvailableQty(), 0,
+            referenceId);
+    }
+
+    private Inventory getInventoryEntity(Long warehouseId, Long skuId) {
+        return inventoryRepository.findByWarehouseIdAndSkuId(warehouseId, skuId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.INSUFFICIENT_STOCK));
+    }
+
+    private void saveHistory(Inventory inventory, ChangeType changeType, int beforeQty, int afterQty, int changeQty,
+        Long referenceId) {
+        inventoryHistoryRepository.save(InventoryHistory.create(
+            inventory,
+            changeType,
+            beforeQty,
+            afterQty,
+            changeQty,
+            referenceId
+        ));
     }
 }

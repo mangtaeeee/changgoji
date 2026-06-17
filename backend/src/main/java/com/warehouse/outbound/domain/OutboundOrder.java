@@ -16,6 +16,7 @@ import java.util.List;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -51,6 +52,7 @@ public class OutboundOrder {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
+    @BatchSize(size = 100)
     @OneToMany(mappedBy = "outboundOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OutboundItem> items = new ArrayList<>();
 

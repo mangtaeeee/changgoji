@@ -62,6 +62,10 @@ public class Inventory {
         return inventory;
     }
 
+    public void increase(int qty) {
+        this.availableQty += qty;
+    }
+
     public void allocate(int qty) {
         if (availableQty < qty) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_STOCK);

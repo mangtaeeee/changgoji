@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: changgoji-postgres
+    environment:
+      POSTGRES_DB: changgoji
+      POSTGRES_USER: changgoji
+      POSTGRES_PASSWORD: changgoji
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U changgoji -d changgoji"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - changgoji
+
+  redis:
+    image: redis:7-alpine
+    container_name: changgoji-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - changgoji
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: changgoji-backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/changgoji
+      SPRING_DATASOURCE_USERNAME: changgoji
+      SPRING_DATASOURCE_PASSWORD: changgoji
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - changgoji
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  changgoji:
+    driver: bridge

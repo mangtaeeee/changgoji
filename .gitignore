@@ -1,0 +1,17 @@
+# IntelliJ IDEA
+.idea/
+backend/.idea/
+*.iml
+out/
+
+# Gradle
+.gradle/
+backend/.gradle/
+
+# Build outputs
+build/
+backend/build/
+
+# OS / local noise
+.DS_Store
+Thumbs.db

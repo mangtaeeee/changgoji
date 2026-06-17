@@ -4,12 +4,16 @@ import com.warehouse.common.exception.BusinessException;
 import com.warehouse.common.exception.ErrorCode;
 import com.warehouse.inbound.domain.InboundOrder;
 import com.warehouse.inbound.domain.InboundReceipt;
+import com.warehouse.inbound.repository.InboundOrderQueryRepository;
 import com.warehouse.inbound.repository.InboundOrderRepository;
 import com.warehouse.inbound.repository.InboundReceiptRepository;
 import com.warehouse.inbound.service.dto.InboundConfirmRequest;
 import com.warehouse.inbound.service.dto.InboundOrderCreateRequest;
 import com.warehouse.inbound.service.dto.InboundOrderResponse;
 import com.warehouse.inbound.service.dto.InboundReceiveRequest;
+import com.warehouse.inventory.domain.ChangeType;
+import com.warehouse.inventory.service.InventoryService;
+import com.warehouse.inventory.service.dto.StockIncreaseCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class InboundService {
 
     private final InboundOrderRepository inboundOrderRepository;
+    private final InboundOrderQueryRepository inboundOrderQueryRepository;
     private final InboundReceiptRepository inboundReceiptRepository;
+    private final InventoryService inventoryService;
 
     @Transactional
     public InboundOrderResponse createInboundOrder(InboundOrderCreateRequest request) {
@@ -35,7 +41,7 @@ public class InboundService {
 
     @Transactional
     public InboundOrderResponse receiveInboundOrder(Long id, InboundReceiveRequest request) {
-        InboundOrder order = getOrder(id);
+        InboundOrder order = getOrderWithItems(id);
         order.startReceiving();
         request.items().forEach(received -> order.getItems().stream()
             .filter(item -> item.getId().equals(received.inboundItemId()))
@@ -46,14 +52,31 @@ public class InboundService {
 
     @Transactional
     public InboundOrderResponse confirmInboundOrder(Long id, InboundConfirmRequest request) {
-        InboundOrder order = getOrder(id);
+        InboundOrder order = getOrderWithItems(id);
         order.confirm();
+        order.getItems().stream()
+            .filter(item -> item.getReceivedQty() > 0)
+            .forEach(item -> inventoryService.increaseStock(
+                new StockIncreaseCommand(
+                    order.getWarehouseId(),
+                    item.getSkuId(),
+                    item.getSkuName(),
+                    item.getReceivedQty(),
+                    order.getId()
+                ),
+                ChangeType.INBOUND
+            ));
         inboundReceiptRepository.save(InboundReceipt.create(order, request.confirmedBy(), request.memo()));
         return InboundOrderResponse.from(order);
     }
 
     private InboundOrder getOrder(Long id) {
         return inboundOrderRepository.findById(id)
+            .orElseThrow(() -> new BusinessException(ErrorCode.INBOUND_ORDER_NOT_FOUND));
+    }
+
+    private InboundOrder getOrderWithItems(Long id) {
+        return inboundOrderQueryRepository.findByIdWithItems(id)
             .orElseThrow(() -> new BusinessException(ErrorCode.INBOUND_ORDER_NOT_FOUND));
     }
 }

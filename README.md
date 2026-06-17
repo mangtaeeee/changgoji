@@ -161,6 +161,14 @@ Swagger UI:
 http://localhost:8080/swagger-ui.html
 ```
 
+기존에 띄운 PostgreSQL 볼륨이 남아 있는데 테이블 구조가 바뀐 경우에는 `ddl-auto=validate`에서 서버가 뜨지 않을 수 있습니다. 개발 환경에서 초기 데이터가 중요하지 않다면 아래처럼 볼륨까지 지운 뒤 다시 실행하면 `infra/db/init.sql` 기준으로 새로 만들어집니다.
+
+```powershell
+cd infra
+docker compose down -v
+docker compose up --build
+```
+
 ## 테스트
 
 핵심 도메인 연결 흐름은 서비스 단위 테스트로 검증합니다.

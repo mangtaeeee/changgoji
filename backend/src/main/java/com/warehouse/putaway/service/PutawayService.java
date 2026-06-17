@@ -1,11 +1,10 @@
 package com.warehouse.putaway.service;
 
-import com.warehouse.common.exception.BusinessException;
-import com.warehouse.common.exception.ErrorCode;
 import com.warehouse.inventory.service.InventoryService;
 import com.warehouse.inventory.service.dto.StockLocationCommand;
 import com.warehouse.putaway.domain.PutawayStatus;
 import com.warehouse.putaway.domain.PutawayTask;
+import com.warehouse.putaway.exception.PutawayTaskNotFoundException;
 import com.warehouse.putaway.repository.PutawayTaskRepository;
 import com.warehouse.putaway.service.dto.PutawayConfirmRequest;
 import com.warehouse.putaway.service.dto.PutawayStartRequest;
@@ -76,6 +75,6 @@ public class PutawayService {
 
     private PutawayTask getTask(Long id) {
         return putawayTaskRepository.findById(id)
-            .orElseThrow(() -> new BusinessException(ErrorCode.PUTAWAY_TASK_NOT_FOUND));
+            .orElseThrow(PutawayTaskNotFoundException::new);
     }
 }

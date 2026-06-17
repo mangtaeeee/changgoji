@@ -1,7 +1,6 @@
 package com.warehouse.inventory.domain;
 
-import com.warehouse.common.exception.BusinessException;
-import com.warehouse.common.exception.ErrorCode;
+import com.warehouse.inventory.exception.InsufficientStockException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -68,7 +67,7 @@ public class Inventory {
 
     public void allocate(int qty) {
         if (availableQty < qty) {
-            throw new BusinessException(ErrorCode.INSUFFICIENT_STOCK);
+            throw new InsufficientStockException();
         }
         this.availableQty -= qty;
         this.allocatedQty += qty;

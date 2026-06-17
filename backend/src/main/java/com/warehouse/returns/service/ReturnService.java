@@ -1,13 +1,13 @@
 package com.warehouse.returns.service;
 
-import com.warehouse.common.exception.BusinessException;
-import com.warehouse.common.exception.ErrorCode;
+import com.warehouse.common.exception.InvalidInputException;
 import com.warehouse.inventory.domain.ChangeType;
 import com.warehouse.inventory.service.InventoryService;
 import com.warehouse.inventory.service.dto.StockIncreaseCommand;
 import com.warehouse.returns.domain.ItemCondition;
 import com.warehouse.returns.domain.ReturnItem;
 import com.warehouse.returns.domain.ReturnOrder;
+import com.warehouse.returns.exception.ReturnOrderNotFoundException;
 import com.warehouse.returns.repository.ReturnOrderQueryRepository;
 import com.warehouse.returns.repository.ReturnOrderRepository;
 import com.warehouse.returns.service.dto.ReturnOrderCreateRequest;
@@ -84,11 +84,11 @@ public class ReturnService {
         return order.getItems().stream()
             .filter(item -> item.getId().equals(returnItemId))
             .findFirst()
-            .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT));
+            .orElseThrow(InvalidInputException::new);
     }
 
     private ReturnOrder getOrderWithItems(Long id) {
         return returnOrderQueryRepository.findByIdWithItems(id)
-            .orElseThrow(() -> new BusinessException(ErrorCode.RETURN_ORDER_NOT_FOUND));
+            .orElseThrow(ReturnOrderNotFoundException::new);
     }
 }

@@ -1,9 +1,8 @@
 package com.warehouse.inbound.service;
 
-import com.warehouse.common.exception.BusinessException;
-import com.warehouse.common.exception.ErrorCode;
 import com.warehouse.inbound.domain.InboundOrder;
 import com.warehouse.inbound.domain.InboundReceipt;
+import com.warehouse.inbound.exception.InboundOrderNotFoundException;
 import com.warehouse.inbound.repository.InboundOrderQueryRepository;
 import com.warehouse.inbound.repository.InboundOrderRepository;
 import com.warehouse.inbound.repository.InboundReceiptRepository;
@@ -85,6 +84,6 @@ public class InboundService {
 
     private InboundOrder getOrderWithItems(Long id) {
         return inboundOrderQueryRepository.findByIdWithItems(id)
-            .orElseThrow(() -> new BusinessException(ErrorCode.INBOUND_ORDER_NOT_FOUND));
+            .orElseThrow(InboundOrderNotFoundException::new);
     }
 }

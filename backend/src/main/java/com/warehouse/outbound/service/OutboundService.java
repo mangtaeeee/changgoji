@@ -1,10 +1,10 @@
 package com.warehouse.outbound.service;
 
-import com.warehouse.common.exception.BusinessException;
-import com.warehouse.common.exception.ErrorCode;
+import com.warehouse.common.exception.InvalidStatusException;
 import com.warehouse.inventory.service.InventoryService;
 import com.warehouse.outbound.domain.OutboundOrder;
 import com.warehouse.outbound.domain.OutboundStatus;
+import com.warehouse.outbound.exception.OutboundOrderNotFoundException;
 import com.warehouse.outbound.repository.OutboundOrderQueryRepository;
 import com.warehouse.outbound.repository.OutboundOrderRepository;
 import com.warehouse.outbound.service.dto.OutboundOrderCreateRequest;
@@ -41,7 +41,7 @@ public class OutboundService {
     public OutboundOrderResponse allocateOutboundOrder(Long id) {
         OutboundOrder order = getOrderWithItems(id);
         if (order.getStatus() != OutboundStatus.PENDING) {
-            throw new BusinessException(ErrorCode.INVALID_STATUS);
+            throw new InvalidStatusException();
         }
         order.getItems().forEach(item -> inventoryService.allocateStock(
             order.getWarehouseId(),
@@ -93,6 +93,6 @@ public class OutboundService {
 
     private OutboundOrder getOrderWithItems(Long id) {
         return outboundOrderQueryRepository.findByIdWithItems(id)
-            .orElseThrow(() -> new BusinessException(ErrorCode.OUTBOUND_ORDER_NOT_FOUND));
+            .orElseThrow(OutboundOrderNotFoundException::new);
     }
 }

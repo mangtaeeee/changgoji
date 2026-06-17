@@ -37,15 +37,16 @@
 | ORDER_001 | 유효하지 않은 상태 전이입니다. | 400 |
 | COMMON_001 | 동시 요청으로 인해 처리에 실패했습니다. 다시 시도해주세요. | 409 |
 | COMMON_002 | 입력값이 올바르지 않습니다. | 400 |
-| INBOUND_001 | 입고 지시를 찾을 수 없습니다. | 400 |
-| OUTBOUND_001 | 출고 지시를 찾을 수 없습니다. | 400 |
-| RETURN_001 | 반품 지시를 찾을 수 없습니다. | 400 |
-| PUTAWAY_001 | 적치 작업을 찾을 수 없습니다. | 400 |
-| PICKING_001 | 피킹 웨이브를 찾을 수 없습니다. | 400 |
-| PICKING_002 | 피킹 작업을 찾을 수 없습니다. | 400 |
-| SHIPPING_001 | 송장을 찾을 수 없습니다. | 400 |
+| COMMON_999 | 서버 내부 오류가 발생했습니다. | 500 |
+| INBOUND_001 | 입고 지시를 찾을 수 없습니다. | 404 |
+| OUTBOUND_001 | 출고 지시를 찾을 수 없습니다. | 404 |
+| RETURN_001 | 반품 지시를 찾을 수 없습니다. | 404 |
+| PUTAWAY_001 | 적치 작업을 찾을 수 없습니다. | 404 |
+| PICKING_001 | 피킹 웨이브를 찾을 수 없습니다. | 404 |
+| PICKING_002 | 피킹 작업을 찾을 수 없습니다. | 404 |
+| SHIPPING_001 | 송장을 찾을 수 없습니다. | 404 |
 
-> 현재 `BusinessException`은 공통으로 400을 반환한다. 도메인별 404 매핑은 API 안정화 단계에서 분리할 예정이다.
+> 각 도메인 예외는 `BusinessException`을 상속하고, HTTP 상태는 `ErrorCode`에 정의한다.
 
 ---
 
@@ -107,6 +108,12 @@
 
 ## 재고 API
 
+### 창고 재고 목록 조회
+
+`GET /inventories?warehouseId=1`
+
+창고 ID 기준으로 SKU별 재고와 위치별 수량을 조회한다. QueryDSL DTO Projection을 사용한다.
+
 ### SKU별 재고 조회
 
 `GET /inventories/{skuId}?warehouseId=1`
@@ -127,7 +134,11 @@
 - `Inventory.availableQty` 조정
 - `InventoryHistory(ADJUST)` 기록
 
-> 창고 전체 재고 목록과 재고 이력 조회 API는 아직 구현 전이다. 관리자 웹 화면 요구사항이 잡히면 QueryDSL 기반 조회 API로 확장한다.
+### 재고 이력 조회
+
+`GET /inventories/{id}/history`
+
+재고 ID 기준으로 입고, 할당, 출고, 반품, 조정 이력을 최신순으로 조회한다.
 
 ---
 

@@ -198,7 +198,7 @@ OutboundOrderQueryRepository.findByIdWithItems()
 ReturnOrderQueryRepository.findByIdWithItems()
 ```
 
-목록 조회는 아직 본격적으로 만들지 않았다. 관리자 화면을 붙일 때는 조회 조건과 페이지네이션이 중요해지므로, 그때 DTO Projection 기반 QueryDSL 조회를 추가할 계획이다.
+재고 목록과 재고 이력 조회는 QueryDSL DTO Projection으로 구현했다. 엔티티를 그대로 반환하지 않고 화면에 필요한 필드만 조회해서 영속성 컨텍스트에 불필요한 객체를 올리지 않기 위해서다. 페이지네이션과 검색 조건은 관리자 화면을 붙이면서 확장할 계획이다.
 
 ---
 
@@ -313,3 +313,27 @@ docker compose up --build
 ```
 
 `ddl-auto=validate`를 쓰기 때문에 초기 스키마는 `infra/db/init.sql`에 명시했다. 테이블이 엔티티와 맞지 않으면 서버가 바로 실패하므로, 개발 중 스키마 불일치를 빨리 발견할 수 있다.
+
+---
+
+## 17. 예외는 공통 포맷으로 처리하되 도메인별 클래스로 나눈다
+
+처음에는 `BusinessException`에 `ErrorCode`만 넣어 던지는 방식으로 시작했다. 기능이 적을 때는 빠르지만, 도메인이 늘어나면 서비스 코드에서 어떤 업무 예외인지 한눈에 보이지 않는다. 나중에 MSA로 나누게 되면 각 서비스가 자기 도메인의 예외를 소유하는 편이 더 자연스럽다.
+
+그래서 구조를 아래처럼 바꿨다.
+
+```
+BusinessException
+├── InboundOrderNotFoundException
+├── OutboundOrderNotFoundException
+├── ReturnOrderNotFoundException
+├── PutawayTaskNotFoundException
+├── PickingWaveNotFoundException
+├── PickingTaskNotFoundException
+├── ShippingLabelNotFoundException
+└── InsufficientStockException
+```
+
+`ErrorCode`에는 코드, 메시지뿐 아니라 HTTP 상태도 같이 둔다. 전역 예외 핸들러는 예외 타입별로 응답 모양을 새로 만들지 않고, `ErrorCode`에 정의된 상태와 메시지를 그대로 사용한다.
+
+이렇게 하면 컨트롤러 응답은 계속 같은 포맷을 유지하면서도, 도메인 내부 코드는 `throw new ShippingLabelNotFoundException()`처럼 읽히게 된다. 나중에 서비스를 분리하더라도 각 도메인 예외 클래스를 해당 서비스로 옮기기 쉽다.

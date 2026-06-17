@@ -1,19 +1,22 @@
 package com.warehouse.inventory.service;
 
-import com.warehouse.common.exception.BusinessException;
-import com.warehouse.common.exception.ErrorCode;
 import com.warehouse.inventory.domain.ChangeType;
 import com.warehouse.inventory.domain.Inventory;
 import com.warehouse.inventory.domain.InventoryHistory;
 import com.warehouse.inventory.domain.InventoryLocation;
+import com.warehouse.inventory.exception.InsufficientStockException;
 import com.warehouse.inventory.repository.InventoryHistoryRepository;
 import com.warehouse.inventory.repository.InventoryLocationRepository;
+import com.warehouse.inventory.repository.InventoryQueryRepository;
 import com.warehouse.inventory.repository.InventoryRepository;
 import com.warehouse.inventory.service.dto.InventoryAdjustRequest;
+import com.warehouse.inventory.service.dto.InventoryHistoryResponse;
+import com.warehouse.inventory.service.dto.InventoryListResponse;
 import com.warehouse.inventory.service.dto.InventoryResponse;
 import com.warehouse.inventory.service.dto.StockIncreaseCommand;
 import com.warehouse.inventory.service.dto.StockLocationDecreaseCommand;
 import com.warehouse.inventory.service.dto.StockLocationCommand;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,16 +29,25 @@ public class InventoryService {
     private final InventoryRepository inventoryRepository;
     private final InventoryHistoryRepository inventoryHistoryRepository;
     private final InventoryLocationRepository inventoryLocationRepository;
+    private final InventoryQueryRepository inventoryQueryRepository;
 
     public InventoryResponse getInventory(Long warehouseId, Long skuId) {
         return InventoryResponse.from(inventoryRepository.findByWarehouseIdAndSkuId(warehouseId, skuId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.INSUFFICIENT_STOCK)));
+            .orElseThrow(InsufficientStockException::new));
+    }
+
+    public List<InventoryListResponse> getInventories(Long warehouseId) {
+        return inventoryQueryRepository.findInventories(warehouseId);
+    }
+
+    public List<InventoryHistoryResponse> getInventoryHistories(Long inventoryId) {
+        return inventoryQueryRepository.findHistories(inventoryId);
     }
 
     @Transactional
     public InventoryResponse adjustInventory(InventoryAdjustRequest request) {
         Inventory inventory = inventoryRepository.findById(request.inventoryId())
-            .orElseThrow(() -> new BusinessException(ErrorCode.INSUFFICIENT_STOCK));
+            .orElseThrow(InsufficientStockException::new);
         int beforeQty = inventory.getAvailableQty();
         inventory.adjust(request.adjustQty());
         inventoryHistoryRepository.save(InventoryHistory.create(
@@ -107,13 +119,13 @@ public class InventoryService {
         Inventory inventory = getInventoryEntity(command.warehouseId(), command.skuId());
         InventoryLocation location = inventoryLocationRepository
             .findByInventoryIdAndLocationCode(inventory.getId(), command.locationCode())
-            .orElseThrow(() -> new BusinessException(ErrorCode.INSUFFICIENT_STOCK));
+            .orElseThrow(InsufficientStockException::new);
         location.decrease(command.qty());
     }
 
     private Inventory getInventoryEntity(Long warehouseId, Long skuId) {
         return inventoryRepository.findByWarehouseIdAndSkuId(warehouseId, skuId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.INSUFFICIENT_STOCK));
+            .orElseThrow(InsufficientStockException::new);
     }
 
     private void saveHistory(Inventory inventory, ChangeType changeType, int beforeQty, int afterQty, int changeQty,

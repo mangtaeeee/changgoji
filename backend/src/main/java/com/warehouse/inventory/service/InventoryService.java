@@ -5,11 +5,14 @@ import com.warehouse.common.exception.ErrorCode;
 import com.warehouse.inventory.domain.ChangeType;
 import com.warehouse.inventory.domain.Inventory;
 import com.warehouse.inventory.domain.InventoryHistory;
+import com.warehouse.inventory.domain.InventoryLocation;
 import com.warehouse.inventory.repository.InventoryHistoryRepository;
+import com.warehouse.inventory.repository.InventoryLocationRepository;
 import com.warehouse.inventory.repository.InventoryRepository;
 import com.warehouse.inventory.service.dto.InventoryAdjustRequest;
 import com.warehouse.inventory.service.dto.InventoryResponse;
 import com.warehouse.inventory.service.dto.StockIncreaseCommand;
+import com.warehouse.inventory.service.dto.StockLocationCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +24,7 @@ public class InventoryService {
 
     private final InventoryRepository inventoryRepository;
     private final InventoryHistoryRepository inventoryHistoryRepository;
+    private final InventoryLocationRepository inventoryLocationRepository;
 
     public InventoryResponse getInventory(Long warehouseId, Long skuId) {
         return InventoryResponse.from(inventoryRepository.findByWarehouseIdAndSkuId(warehouseId, skuId)
@@ -84,6 +88,17 @@ public class InventoryService {
         Inventory inventory = getInventoryEntity(warehouseId, skuId);
         saveHistory(inventory, ChangeType.DEFECTIVE_RETURN, inventory.getAvailableQty(), inventory.getAvailableQty(), 0,
             referenceId);
+    }
+
+    @Transactional
+    public void increaseLocationStock(StockLocationCommand command) {
+        Inventory inventory = getInventoryEntity(command.warehouseId(), command.skuId());
+        InventoryLocation location = inventoryLocationRepository
+            .findByInventoryIdAndLocationCode(inventory.getId(), command.locationCode())
+            .orElseGet(() -> inventoryLocationRepository.save(
+                InventoryLocation.create(inventory, command.locationCode(), 0)
+            ));
+        location.increase(command.qty());
     }
 
     private Inventory getInventoryEntity(Long warehouseId, Long skuId) {

@@ -45,4 +45,8 @@ public class InventoryLocation {
         location.qty = qty;
         return location;
     }
+
+    public void increase(int qty) {
+        this.qty += qty;
+    }
 }

@@ -12,7 +12,8 @@ public enum ErrorCode {
     INVALID_INPUT("COMMON_002", "입력값이 올바르지 않습니다."),
     INBOUND_ORDER_NOT_FOUND("INBOUND_001", "입고 지시를 찾을 수 없습니다."),
     OUTBOUND_ORDER_NOT_FOUND("OUTBOUND_001", "출고 지시를 찾을 수 없습니다."),
-    RETURN_ORDER_NOT_FOUND("RETURN_001", "반품 지시를 찾을 수 없습니다.");
+    RETURN_ORDER_NOT_FOUND("RETURN_001", "반품 지시를 찾을 수 없습니다."),
+    PUTAWAY_TASK_NOT_FOUND("PUTAWAY_001", "적치 작업을 찾을 수 없습니다.");
 
     private final String code;
     private final String message;

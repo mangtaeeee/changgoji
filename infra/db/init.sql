@@ -145,3 +145,21 @@ CREATE TABLE IF NOT EXISTS picking_task (
     status VARCHAR(30) NOT NULL,
     picked_at TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS shipping_label (
+    id BIGSERIAL PRIMARY KEY,
+    outbound_order_id BIGINT NOT NULL REFERENCES outbound_order(id),
+    tracking_no VARCHAR(255) NOT NULL UNIQUE,
+    carrier VARCHAR(255) NOT NULL,
+    receiver_name VARCHAR(255) NOT NULL,
+    receiver_phone VARCHAR(255) NOT NULL,
+    receiver_address VARCHAR(255) NOT NULL,
+    label_data TEXT NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    created_at TIMESTAMP,
+    print_requested_at TIMESTAMP,
+    printed_at TIMESTAMP,
+    failure_reason VARCHAR(255)
+);
+
+CREATE INDEX IF NOT EXISTS idx_shipping_label_outbound_order ON shipping_label (outbound_order_id);

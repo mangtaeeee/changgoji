@@ -1,11 +1,13 @@
 # API 명세
 
-> Base URL: `http://localhost:8080/api/v1`
-> 전체 API는 Swagger UI에서 확인 가능: `http://localhost:8080/swagger-ui.html`
+> Base URL: `http://localhost:8080/api/v1`  
+> Swagger UI: `http://localhost:8080/swagger-ui.html`
+
+현재 문서는 실제 구현된 Spring Boot API를 기준으로 정리한다. 목록 조회, 검색 조건, 권한 분리처럼 화면 개발 단계에서 필요한 API는 이후 `admin-api`, `pda-api`로 분리하며 확장한다.
 
 ---
 
-## 공통 응답 형식
+## 공통 응답
 
 ### 성공
 ```json
@@ -13,7 +15,7 @@
   "success": true,
   "code": "SUCCESS",
   "message": "요청이 성공했습니다.",
-  "data": { }
+  "data": {}
 }
 ```
 
@@ -27,26 +29,32 @@
 }
 ```
 
-### ErrorCode 목록
+### ErrorCode
+
 | 코드 | 메시지 | HTTP 상태 |
 |---|---|---|
 | INVENTORY_001 | 재고가 부족합니다. | 400 |
 | ORDER_001 | 유효하지 않은 상태 전이입니다. | 400 |
 | COMMON_001 | 동시 요청으로 인해 처리에 실패했습니다. 다시 시도해주세요. | 409 |
 | COMMON_002 | 입력값이 올바르지 않습니다. | 400 |
-| INBOUND_001 | 입고 지시를 찾을 수 없습니다. | 404 |
-| OUTBOUND_001 | 출고 지시를 찾을 수 없습니다. | 404 |
-| RETURN_001 | 반품 지시를 찾을 수 없습니다. | 404 |
+| INBOUND_001 | 입고 지시를 찾을 수 없습니다. | 400 |
+| OUTBOUND_001 | 출고 지시를 찾을 수 없습니다. | 400 |
+| RETURN_001 | 반품 지시를 찾을 수 없습니다. | 400 |
+| PUTAWAY_001 | 적치 작업을 찾을 수 없습니다. | 400 |
+| PICKING_001 | 피킹 웨이브를 찾을 수 없습니다. | 400 |
+| PICKING_002 | 피킹 작업을 찾을 수 없습니다. | 400 |
+| SHIPPING_001 | 송장을 찾을 수 없습니다. | 400 |
+
+> 현재 `BusinessException`은 공통으로 400을 반환한다. 도메인별 404 매핑은 API 안정화 단계에서 분리할 예정이다.
 
 ---
 
 ## 입고 API
 
 ### 입고 지시 등록
-```
-POST /inbound-orders
-```
-Request
+
+`POST /inbound-orders`
+
 ```json
 {
   "warehouseId": 1,
@@ -59,21 +67,16 @@ Request
 }
 ```
 
-### 입고 지시 목록 조회
-```
-GET /inbound-orders?warehouseId=1&status=REQUESTED&page=0&size=20
-```
-
 ### 입고 지시 단건 조회
-```
-GET /inbound-orders/{id}
-```
+
+`GET /inbound-orders/{id}`
+
+응답에는 실사 처리에 필요한 `inboundItemId`가 포함된다.
 
 ### 실사 입고 처리
-```
-PATCH /inbound-orders/{id}/receive
-```
-Request
+
+`PATCH /inbound-orders/{id}/receive`
+
 ```json
 {
   "items": [
@@ -83,47 +86,35 @@ Request
 }
 ```
 
-### 입고 확정 (→ 재고 반영)
-```
-PATCH /inbound-orders/{id}/confirm
-```
-Request
+### 입고 확정
+
+`PATCH /inbound-orders/{id}/confirm`
+
 ```json
-{ "confirmedBy": 999, "memo": "일부 파손 1개 제외" }
+{
+  "confirmedBy": 999,
+  "memo": "일부 파손 1개 제외"
+}
 ```
+
+처리 결과:
+- 실사 수량 기준으로 `Inventory.availableQty` 증가
+- `InventoryHistory(INBOUND)` 기록
+- 입고 품목별 `PutawayTask` 자동 생성
+- `InboundReceipt` 저장
 
 ---
 
 ## 재고 API
 
-### 창고 전체 재고 조회
-```
-GET /inventories?warehouseId=1&page=0&size=20
-```
-Response data
-```json
-[
-  {
-    "id": 1,
-    "skuId": 100,
-    "skuName": "상품A",
-    "availableQty": 48,
-    "allocatedQty": 10,
-    "locationCode": "A-01-03"
-  }
-]
-```
-
 ### SKU별 재고 조회
-```
-GET /inventories/{skuId}?warehouseId=1
-```
 
-### 재고 조정 (실사)
-```
-POST /inventories/adjust
-```
-Request
+`GET /inventories/{skuId}?warehouseId=1`
+
+### 재고 조정
+
+`POST /inventories/adjust`
+
 ```json
 {
   "inventoryId": 1,
@@ -132,20 +123,58 @@ Request
 }
 ```
 
-### 재고 이력 조회
+처리 결과:
+- `Inventory.availableQty` 조정
+- `InventoryHistory(ADJUST)` 기록
+
+> 창고 전체 재고 목록과 재고 이력 조회 API는 아직 구현 전이다. 관리자 웹 화면 요구사항이 잡히면 QueryDSL 기반 조회 API로 확장한다.
+
+---
+
+## 적치 API
+
+입고 확정 시 자동 생성된 적치 작업을 조회하고, 작업자가 실제 위치를 확정하는 API다.
+
+### 적치 작업 목록 조회
+
+`GET /putaway-tasks?warehouseId=1&status=PENDING`
+
+### 적치 작업 단건 조회
+
+`GET /putaway-tasks/{id}`
+
+### 적치 작업 시작
+
+`PATCH /putaway-tasks/{id}/start`
+
+```json
+{
+  "assignedTo": 999
+}
 ```
-GET /inventories/{id}/history?page=0&size=20
+
+### 적치 확정
+
+`PATCH /putaway-tasks/{id}/confirm`
+
+```json
+{
+  "confirmedLocation": "A-01-03"
+}
 ```
+
+처리 결과:
+- `PutawayTask.status = COMPLETED`
+- `InventoryLocation.qty` 증가
 
 ---
 
 ## 출고 API
 
 ### 출고 지시 등록
-```
-POST /outbound-orders
-```
-Request
+
+`POST /outbound-orders`
+
 ```json
 {
   "warehouseId": 1,
@@ -156,44 +185,80 @@ Request
 }
 ```
 
-### 출고 지시 목록 조회
-```
-GET /outbound-orders?warehouseId=1&status=PENDING&page=0&size=20
-```
-
 ### 출고 지시 단건 조회
-```
-GET /outbound-orders/{id}
-```
+
+`GET /outbound-orders/{id}`
+
+응답에는 피킹/출고 확인에 필요한 `outboundItemId`가 포함된다.
 
 ### 재고 할당
-```
-PATCH /outbound-orders/{id}/allocate
-```
-> 재고 차감(availableQty↓, allocatedQty↑) + 상태 PENDING → ALLOCATED
-> 동시 요청 시 낙관적 락으로 처리, 최대 3회 재시도
+
+`PATCH /outbound-orders/{id}/allocate`
+
+처리 결과:
+- `availableQty` 감소
+- `allocatedQty` 증가
+- `InventoryHistory(ALLOCATE)` 기록
+- `PickingWave`, `PickingTask` 자동 생성
 
 ### 출고 확정
-```
-PATCH /outbound-orders/{id}/ship
-```
-> allocatedQty 차감 확정 + 상태 PICKING → SHIPPED
 
-### 출고 취소 (재고 보상 복구)
+`PATCH /outbound-orders/{id}/ship`
+
+처리 결과:
+- `allocatedQty` 감소
+- 출고 품목 `shippedQty` 반영
+- `InventoryHistory(OUTBOUND)` 기록
+
+### 출고 취소
+
+`PATCH /outbound-orders/{id}/cancel`
+
+처리 결과:
+- `ALLOCATED` 상태이면 `allocatedQty → availableQty` 복구
+- `InventoryHistory(RELEASE)` 기록
+
+---
+
+## 피킹 API
+
+출고 할당 후 자동 생성된 피킹 웨이브와 위치별 작업을 처리한다.
+
+### 피킹 웨이브 목록 조회
+
+`GET /picking-waves?warehouseId=1&status=OPEN`
+
+### 피킹 웨이브 단건 조회
+
+`GET /picking-waves/{id}`
+
+### 피킹 작업 목록 조회
+
+`GET /picking-waves/{id}/tasks`
+
+### 피킹 완료
+
+`PATCH /picking-tasks/{id}/pick`
+
+```json
+{
+  "assignedTo": 999
+}
 ```
-PATCH /outbound-orders/{id}/cancel
-```
-> ALLOCATED 상태였으면 allocatedQty → availableQty 복구 (보상 처리)
+
+처리 결과:
+- `PickingTask.status = PICKED`
+- `InventoryLocation.qty` 감소
+- 모든 작업이 끝나면 `PickingWave.status = COMPLETED`
 
 ---
 
 ## 반품 API
 
 ### 반품 접수
-```
-POST /return-orders
-```
-Request
+
+`POST /return-orders`
+
 ```json
 {
   "outboundOrderId": 1,
@@ -205,21 +270,16 @@ Request
 }
 ```
 
-### 반품 목록 조회
-```
-GET /return-orders?warehouseId=1&status=REQUESTED&page=0&size=20
-```
-
 ### 반품 단건 조회
-```
-GET /return-orders/{id}
-```
+
+`GET /return-orders/{id}`
+
+응답에는 실사 처리에 필요한 `returnItemId`가 포함된다.
 
 ### 반품 실사 처리
-```
-PATCH /return-orders/{id}/receive
-```
-Request
+
+`PATCH /return-orders/{id}/receive`
+
 ```json
 {
   "items": [
@@ -228,46 +288,75 @@ Request
 }
 ```
 
-### 반품 완료 (→ 재고 복구)
-```
-PATCH /return-orders/{id}/complete
-```
-> RESELLABLE → availableQty 복구
-> DEFECTIVE → 재고 미복구, 불량 이력만 기록
+### 반품 완료
+
+`PATCH /return-orders/{id}/complete`
+
+처리 결과:
+- `RESELLABLE`: `availableQty` 복구, `InventoryHistory(RETURN_INBOUND)` 기록
+- `DEFECTIVE`: 재고 미복구, `InventoryHistory(DEFECTIVE_RETURN)` 기록
 
 ### 반품 거부
+
+`PATCH /return-orders/{id}/reject`
+
+---
+
+## 송장 API
+
+### 송장 생성
+
+`POST /shipping-labels`
+
+```json
+{
+  "outboundOrderId": 1,
+  "carrier": "CJ대한통운",
+  "receiverName": "홍길동",
+  "receiverPhone": "010-1234-5678",
+  "receiverAddress": "서울시 강남구 테헤란로 123"
+}
 ```
-PATCH /return-orders/{id}/reject
+
+처리 결과:
+- 운송장 번호 생성
+- 출력용 `labelData` 저장
+- 상태 `PENDING`
+
+### 송장 단건 조회
+
+`GET /shipping-labels/{id}`
+
+### 출고 지시별 송장 조회
+
+`GET /shipping-labels?outboundOrderId=1`
+
+### 송장 출력 요청
+
+`POST /shipping-labels/{id}/print`
+
+상태를 `PRINT_REQUESTED`로 변경한다. 추후 `print-agent`가 이 상태의 송장을 가져가 출력한다.
+
+### 송장 출력 성공 처리
+
+`PATCH /shipping-labels/{id}/printed`
+
+### 송장 출력 실패 처리
+
+`PATCH /shipping-labels/{id}/failed`
+
+```json
+{
+  "failureReason": "프린터 연결 실패"
+}
 ```
 
 ---
 
-## 설계 도메인 API (미구현)
+## 아직 구현하지 않은 범위
 
-### 적치
-| Method | Path | 설명 |
-|---|---|---|
-| POST | /putaway-tasks | 적치 지시 생성 |
-| PATCH | /putaway-tasks/{id}/confirm | 위치 확정 |
-| GET | /putaway-tasks?status=PENDING | 미완료 조회 |
-
-### 피킹
-| Method | Path | 설명 |
-|---|---|---|
-| POST | /picking-waves | 웨이브 생성 |
-| GET | /picking-waves/{id}/tasks | 작업 목록 |
-| PATCH | /picking-tasks/{id}/pick | 피킹 완료 |
-
-### DPS
-| Method | Path | 설명 |
-|---|---|---|
-| POST | /dps/instructions | 점등 지시 |
-| PATCH | /dps/instructions/{id}/confirm | 버튼 확인 |
-| WS | /ws/dps/{locationCode} | 실시간 점등 상태 |
-
-### 송장
-| Method | Path | 설명 |
-|---|---|---|
-| POST | /shipping-labels | 송장 생성 |
-| POST | /shipping-labels/{id}/print | 프린터 전송 |
-| GET | /shipping-labels/{id}/pdf | PDF 다운로드 |
+| 도메인 | 계획 |
+|---|---|
+| DPS | 피킹 작업 기반 점등 지시와 시뮬레이터 구현 예정 |
+| 송장 PDF 다운로드 | 현재는 labelData와 출력 상태만 관리. PDF 렌더링은 다음 단계 |
+| 관리자/작업자 API 분리 | 현재는 `/api/v1` 공통 API. 화면 개발 시 `/admin-api/v1`, `/pda-api/v1`로 분리 예정 |

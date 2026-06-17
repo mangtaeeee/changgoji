@@ -1,5 +1,7 @@
 # 창고지기
 
+![창고지기 WMS 아키텍처 스케치](docs/images/changgoji-architecture-sketch.svg)
+
 3PL 물류센터의 입고, 재고, 출고, 반품 흐름을 다루는 WMS(Warehouse Management System) 백엔드 프로젝트입니다.
 
 이 프로젝트는 단순히 주문과 상품을 CRUD로 관리하는 예제가 아니라, 물류센터에서 실제로 중요해지는 문제를 코드로 풀어보기 위해 시작했습니다. 입고된 수량이 어떤 재고로 반영되는지, 그 재고가 어느 위치에 적치되는지, 출고 요청이 들어왔을 때 어떤 수량이 할당되고 피킹되는지, 반품된 상품을 다시 판매 가능 재고로 복구해도 되는지 같은 흐름을 하나의 업무 시나리오로 연결하는 데 집중했습니다.
@@ -56,6 +58,16 @@ WMS에서 재고는 단순한 숫자가 아닙니다.
 | 송장 | 송장 생성, 출력 요청, 출력 성공/실패 상태 관리 |
 
 아직 실제 장비 연동은 하지 않았습니다. DPS와 프린터 연동은 추후 시뮬레이터 또는 Agent 방식으로 확장할 수 있도록 설계만 분리해두었습니다.
+
+## 관리자 웹 화면
+
+백엔드 API를 실제 운영자가 어떻게 사용할지 확인하기 위해 React 기반 WMS 콘솔을 함께 구성했습니다. 화면은 소개 페이지가 아니라 입고, 재고, 적치, 출고, 피킹, 송장, 반품 API를 바로 호출해보는 운영 도구 형태로 만들었습니다.
+
+![창고지기 관리자 대시보드](docs/images/frontend-dashboard.png)
+
+- 프론트엔드 위치: [frontend](frontend)
+- 화면 구성 문서: [frontend/README.md](frontend/README.md)
+- 실행 주소: `http://localhost:5173`
 
 ## 설계에서 신경 쓴 부분
 
@@ -203,10 +215,12 @@ PATCH /api/v1/return-orders/{id}/complete
 - [API 명세](docs/api-spec.md)
 - [ERD](docs/erd.md)
 - [기술 의사결정 기록](docs/design-decisions.md)
+- [시연 시나리오](docs/demo-scenario.md)
+- [REST Client 시연 요청](docs/demo.http)
 
 ## 앞으로 확장할 부분
 
-- 관리자 웹: 재고 현황, 입고/출고 지시, 작업 진행률 조회
+- 관리자 웹 고도화: 검색 조건, 페이지네이션, 작업자별 할당 화면, 현장용 반응형 화면
 - Android PDA 앱: 입고 실사, 적치, 피킹, 반품 검수
 - DPS 시뮬레이터: 피킹 위치 점등 지시와 작업 확인
 - 송장 PDF 다운로드 및 print-agent 연동

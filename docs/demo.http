@@ -1,0 +1,180 @@
+@baseUrl = http://localhost:8080/api/v1
+@warehouseId = 1
+@skuId = 100
+@inboundOrderId = 1
+@inboundItemId = 1
+@inventoryId = 1
+@putawayTaskId = 1
+@outboundOrderId = 1
+@pickingWaveId = 1
+@pickingTaskId = 1
+@shippingLabelId = 1
+@returnOrderId = 1
+@returnItemId = 1
+
+### 1. 입고 지시 생성
+POST {{baseUrl}}/inbound-orders
+Content-Type: application/json
+
+{
+  "warehouseId": {{warehouseId}},
+  "supplierId": 10,
+  "scheduledDate": "2026-06-20",
+  "items": [
+    {
+      "skuId": {{skuId}},
+      "skuName": "상품A",
+      "orderedQty": 50
+    }
+  ]
+}
+
+### 2. 입고 지시 단건 조회
+GET {{baseUrl}}/inbound-orders/{{inboundOrderId}}
+
+### 3. 실사 입고 처리
+PATCH {{baseUrl}}/inbound-orders/{{inboundOrderId}}/receive
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "inboundItemId": {{inboundItemId}},
+      "receivedQty": 48
+    }
+  ]
+}
+
+### 4. 입고 확정
+PATCH {{baseUrl}}/inbound-orders/{{inboundOrderId}}/confirm
+Content-Type: application/json
+
+{
+  "confirmedBy": 999,
+  "memo": "데모 입고 확정"
+}
+
+### 5. SKU별 재고 조회
+GET {{baseUrl}}/inventories/{{skuId}}?warehouseId={{warehouseId}}
+
+### 6. 창고 재고 목록 조회
+GET {{baseUrl}}/inventories?warehouseId={{warehouseId}}
+
+### 7. 재고 이력 조회
+GET {{baseUrl}}/inventories/{{inventoryId}}/history
+
+### 8. 적치 작업 목록 조회
+GET {{baseUrl}}/putaway-tasks?warehouseId={{warehouseId}}&status=PENDING
+
+### 9. 적치 작업 시작
+PATCH {{baseUrl}}/putaway-tasks/{{putawayTaskId}}/start
+Content-Type: application/json
+
+{
+  "assignedTo": 999
+}
+
+### 10. 적치 확정
+PATCH {{baseUrl}}/putaway-tasks/{{putawayTaskId}}/confirm
+Content-Type: application/json
+
+{
+  "confirmedLocation": "A-01-03"
+}
+
+### 11. 출고 지시 생성
+POST {{baseUrl}}/outbound-orders
+Content-Type: application/json
+
+{
+  "warehouseId": {{warehouseId}},
+  "orderId": "ORDER-20260617-001",
+  "items": [
+    {
+      "skuId": {{skuId}},
+      "requestedQty": 5,
+      "locationCode": "A-01-03"
+    }
+  ]
+}
+
+### 12. 출고 지시 단건 조회
+GET {{baseUrl}}/outbound-orders/{{outboundOrderId}}
+
+### 13. 재고 할당
+PATCH {{baseUrl}}/outbound-orders/{{outboundOrderId}}/allocate
+
+### 14. 피킹 웨이브 목록 조회
+GET {{baseUrl}}/picking-waves?warehouseId={{warehouseId}}&status=OPEN
+
+### 15. 피킹 작업 목록 조회
+GET {{baseUrl}}/picking-waves/{{pickingWaveId}}/tasks
+
+### 16. 피킹 완료
+PATCH {{baseUrl}}/picking-tasks/{{pickingTaskId}}/pick
+Content-Type: application/json
+
+{
+  "assignedTo": 999
+}
+
+### 17. 송장 생성
+POST {{baseUrl}}/shipping-labels
+Content-Type: application/json
+
+{
+  "outboundOrderId": {{outboundOrderId}},
+  "carrier": "CJ대한통운",
+  "receiverName": "홍길동",
+  "receiverPhone": "010-1234-5678",
+  "receiverAddress": "서울시 강남구 테헤란로 123"
+}
+
+### 18. 송장 출력 요청
+POST {{baseUrl}}/shipping-labels/{{shippingLabelId}}/print
+
+### 19. 송장 출력 성공 처리
+PATCH {{baseUrl}}/shipping-labels/{{shippingLabelId}}/printed
+
+### 20. 출고 확정
+PATCH {{baseUrl}}/outbound-orders/{{outboundOrderId}}/ship
+
+### 21. 반품 접수
+POST {{baseUrl}}/return-orders
+Content-Type: application/json
+
+{
+  "outboundOrderId": {{outboundOrderId}},
+  "warehouseId": {{warehouseId}},
+  "reason": "CUSTOMER_CHANGE",
+  "items": [
+    {
+      "skuId": {{skuId}},
+      "skuName": "상품A",
+      "requestedQty": 2
+    }
+  ]
+}
+
+### 22. 반품 단건 조회
+GET {{baseUrl}}/return-orders/{{returnOrderId}}
+
+### 23. 반품 실사 처리
+PATCH {{baseUrl}}/return-orders/{{returnOrderId}}/receive
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "returnItemId": {{returnItemId}},
+      "receivedQty": 2,
+      "condition": "RESELLABLE"
+    }
+  ]
+}
+
+### 24. 반품 완료
+PATCH {{baseUrl}}/return-orders/{{returnOrderId}}/complete
+
+### 25. 최종 재고 이력 조회
+GET {{baseUrl}}/inventories/{{inventoryId}}/history

@@ -248,6 +248,55 @@ h3 {
   gap: 12px;
 }
 
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.demo-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #b9d8c8;
+  border-radius: 8px;
+  background: #f1fbf5;
+}
+
+.demo-banner strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #123323;
+  font-size: 17px;
+}
+
+.demo-banner p {
+  margin: 0;
+  color: #3d6650;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.demo-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.demo-summary span {
+  padding: 6px 9px;
+  border: 1px solid #b9d8c8;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #27533b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .result-label {
   margin: 12px 0 8px;
   color: #506070;
@@ -582,7 +631,15 @@ tr:last-child td {
   }
 
   .quick-action,
+  .demo-banner,
   .work-guide {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .toolbar,
+  .toolbar-actions,
+  .demo-summary {
     align-items: stretch;
     flex-direction: column;
   }

@@ -100,6 +100,68 @@ const initialForms = {
   },
 };
 
+function getInitialForms() {
+  const params = new URLSearchParams(window.location.search);
+  const forms = JSON.parse(JSON.stringify(initialForms));
+  const sharedFields = ['warehouseId', 'skuId', 'skuName', 'outboundOrderId'];
+
+  sharedFields.forEach((field) => {
+    const value = params.get(field);
+    if (!value) return;
+    Object.keys(forms).forEach((section) => {
+      if (field in forms[section]) {
+        forms[section][field] = value;
+      }
+    });
+  });
+
+  Object.keys(forms).forEach((section) => {
+    Object.keys(forms[section]).forEach((field) => {
+      const value = params.get(field);
+      if (value) {
+        forms[section][field] = value;
+      }
+    });
+  });
+
+  return forms;
+}
+
+function getInitialInventoryRows() {
+  const params = new URLSearchParams(window.location.search);
+  const skuId = params.get('skuId');
+  if (!skuId || !params.get('availableQty')) {
+    return [];
+  }
+  return [{
+    id: Number(params.get('inventoryId') || 0),
+    warehouseId: Number(params.get('warehouseId') || 1),
+    skuId: Number(skuId),
+    skuName: params.get('skuName') || '-',
+    availableQty: Number(params.get('availableQty') || 0),
+    allocatedQty: Number(params.get('allocatedQty') || 0),
+    locationCode: params.get('locationCode') || '-',
+    locationQty: Number(params.get('locationQty') || 0),
+  }];
+}
+
+function getInitialDemoSummary() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.get('skuId') || !params.get('availableQty')) {
+    return null;
+  }
+  return {
+    skuId: Number(params.get('skuId')),
+    skuName: params.get('skuName') || '-',
+    inboundOrderId: Number(params.get('inboundOrderId') || 0),
+    outboundOrderId: Number(params.get('outboundOrderId') || 0),
+    shippingLabelId: Number(params.get('shippingLabelId') || 0),
+    returnOrderId: Number(params.get('returnOrderId') || 0),
+    availableQty: Number(params.get('availableQty') || 0),
+    allocatedQty: Number(params.get('allocatedQty') || 0),
+  };
+}
+
 const tabs = [
   { id: 'dashboard', label: '대시보드', icon: Warehouse },
   { id: 'inbound', label: '입고', icon: ClipboardList },
@@ -133,12 +195,13 @@ function getInitialTab() {
 
 function App() {
   const [activeTab, setActiveTab] = useState(getInitialTab);
-  const [forms, setForms] = useState(initialForms);
+  const [forms, setForms] = useState(getInitialForms);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [inventoryRows, setInventoryRows] = useState([]);
+  const [inventoryRows, setInventoryRows] = useState(getInitialInventoryRows);
   const [putawayRows, setPutawayRows] = useState([]);
   const [pickingRows, setPickingRows] = useState([]);
+  const [demoSummary, setDemoSummary] = useState(getInitialDemoSummary);
   const [toast, setToast] = useState('백엔드가 켜져 있으면 새로고침으로 현황을 불러옵니다.');
 
   const updateForm = (section, field, value) => {
@@ -196,6 +259,169 @@ function App() {
     setPickingRows(waves.status === 'fulfilled' ? waves.value : []);
   };
 
+  const runDemoScenario = () => run('전체 시연 데이터 생성', async () => {
+    const seed = Date.now().toString().slice(-6);
+    const skuId = Number(`8${seed}`);
+    const skuName = `데모상품-${seed}`;
+    const warehouseId = 1;
+    const receivedQty = 48;
+    const outboundQty = 5;
+    const returnQty = 2;
+
+    const inbound = await api('/inbound-orders', {
+      method: 'POST',
+      body: JSON.stringify({
+        warehouseId,
+        supplierId: 10,
+        scheduledDate: todayPlus(3),
+        items: [{ skuId, skuName, orderedQty: 50 }],
+      }),
+    });
+    const inboundItemId = inbound.items[0].id;
+    await api(`/inbound-orders/${inbound.id}/receive`, {
+      method: 'PATCH',
+      body: JSON.stringify({ items: [{ inboundItemId, receivedQty }] }),
+    });
+    await api(`/inbound-orders/${inbound.id}/confirm`, {
+      method: 'PATCH',
+      body: JSON.stringify({ confirmedBy: 999, memo: '대시보드 전체 시연' }),
+    });
+
+    const putaways = await api(`/putaway-tasks?warehouseId=${warehouseId}&status=PENDING`);
+    const putaway = putaways.find((task) => task.skuId === skuId) || putaways[0];
+    await api(`/putaway-tasks/${putaway.id}/start`, {
+      method: 'PATCH',
+      body: JSON.stringify({ assignedTo: 999 }),
+    });
+    await api(`/putaway-tasks/${putaway.id}/confirm`, {
+      method: 'PATCH',
+      body: JSON.stringify({ confirmedLocation: 'A-01-03' }),
+    });
+
+    const outbound = await api('/outbound-orders', {
+      method: 'POST',
+      body: JSON.stringify({
+        warehouseId,
+        orderId: `DEMO-${seed}`,
+        items: [{ skuId, requestedQty: outboundQty, locationCode: 'A-01-03' }],
+      }),
+    });
+    await api(`/outbound-orders/${outbound.id}/allocate`, { method: 'PATCH' });
+
+    const waves = await api(`/picking-waves?warehouseId=${warehouseId}&status=OPEN`);
+    const wave = waves.find((item) => item.outboundOrderId === outbound.id) || waves[0];
+    const tasks = await api(`/picking-waves/${wave.id}/tasks`);
+    await api(`/picking-tasks/${tasks[0].id}/pick`, {
+      method: 'PATCH',
+      body: JSON.stringify({ assignedTo: 999 }),
+    });
+
+    const label = await api('/shipping-labels', {
+      method: 'POST',
+      body: JSON.stringify({
+        outboundOrderId: outbound.id,
+        carrier: 'CJ대한통운',
+        receiverName: '홍길동',
+        receiverPhone: '010-1234-5678',
+        receiverAddress: '서울시 강남구 테헤란로 123',
+      }),
+    });
+    await api(`/shipping-labels/${label.id}/print`, { method: 'POST' });
+    await api(`/shipping-labels/${label.id}/printed`, { method: 'PATCH' });
+    await api(`/outbound-orders/${outbound.id}/ship`, { method: 'PATCH' });
+
+    const returnOrder = await api('/return-orders', {
+      method: 'POST',
+      body: JSON.stringify({
+        outboundOrderId: outbound.id,
+        warehouseId,
+        reason: 'CUSTOMER_CHANGE',
+        items: [{ skuId, skuName, requestedQty: returnQty }],
+      }),
+    });
+    await api(`/return-orders/${returnOrder.id}/receive`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        items: [{ returnItemId: returnOrder.items[0].id, receivedQty: returnQty, condition: 'RESELLABLE' }],
+      }),
+    });
+    await api(`/return-orders/${returnOrder.id}/complete`, { method: 'PATCH' });
+
+    const inventories = await api(`/inventories?warehouseId=${warehouseId}`);
+    const pendingPutaways = await api(`/putaway-tasks?warehouseId=${warehouseId}&status=PENDING`);
+    const openWaves = await api(`/picking-waves?warehouseId=${warehouseId}&status=OPEN`);
+    const demoInventory = inventories.find((item) => item.skuId === skuId);
+
+    setInventoryRows(inventories);
+    setPutawayRows(pendingPutaways);
+    setPickingRows(openWaves);
+    updateSection('inbound', {
+      warehouseId: String(warehouseId),
+      skuId: String(skuId),
+      skuName,
+      inboundOrderId: String(inbound.id),
+      inboundItemId: String(inboundItemId),
+      receivedQty: String(receivedQty),
+    });
+    updateSection('inventory', {
+      warehouseId: String(warehouseId),
+      skuId: String(skuId),
+      inventoryId: String(demoInventory?.id || ''),
+    });
+    updateSection('putaway', {
+      warehouseId: String(warehouseId),
+      putawayTaskId: String(putaway.id),
+      confirmedLocation: 'A-01-03',
+    });
+    updateSection('outbound', {
+      warehouseId: String(warehouseId),
+      orderId: `DEMO-${seed}`,
+      skuId: String(skuId),
+      outboundOrderId: String(outbound.id),
+    });
+    updateSection('picking', {
+      warehouseId: String(warehouseId),
+      pickingWaveId: String(wave.id),
+      pickingTaskId: String(tasks[0].id),
+    });
+    updateSection('shipping', {
+      outboundOrderId: String(outbound.id),
+      shippingLabelId: String(label.id),
+    });
+    updateSection('returns', {
+      outboundOrderId: String(outbound.id),
+      warehouseId: String(warehouseId),
+      skuId: String(skuId),
+      skuName,
+      returnOrderId: String(returnOrder.id),
+      returnItemId: String(returnOrder.items[0].id),
+      receivedQty: String(returnQty),
+    });
+    setDemoSummary({
+      skuId,
+      skuName,
+      inboundOrderId: inbound.id,
+      outboundOrderId: outbound.id,
+      shippingLabelId: label.id,
+      returnOrderId: returnOrder.id,
+      availableQty: demoInventory?.availableQty,
+      allocatedQty: demoInventory?.allocatedQty,
+    });
+
+    return {
+      skuId,
+      skuName,
+      inboundOrderId: inbound.id,
+      putawayTaskId: putaway.id,
+      outboundOrderId: outbound.id,
+      pickingWaveId: wave.id,
+      pickingTaskId: tasks[0].id,
+      shippingLabelId: label.id,
+      returnOrderId: returnOrder.id,
+      inventory: demoInventory,
+    };
+  });
+
   useEffect(() => {
     refreshDashboard().catch(() => undefined);
   }, []);
@@ -214,7 +440,9 @@ function App() {
         inventoryRows={inventoryRows}
         putawayRows={putawayRows}
         pickingRows={pickingRows}
+        demoSummary={demoSummary}
         onRefresh={() => run('대시보드 새로고침', refreshDashboard)}
+        onRunDemo={runDemoScenario}
       />
     ),
     inbound: <InboundView forms={forms} updateForm={updateForm} updateSection={updateSection} run={run} changeTab={changeTab} refreshDashboard={refreshDashboard} />,
@@ -277,15 +505,35 @@ function App() {
   );
 }
 
-function Dashboard({ metrics, inventoryRows, putawayRows, pickingRows, onRefresh }) {
+function Dashboard({ metrics, inventoryRows, putawayRows, pickingRows, demoSummary, onRefresh, onRunDemo }) {
   return (
     <div className="stack">
       <div className="toolbar">
         <h2>운영 현황</h2>
-        <button className="secondary-button" onClick={onRefresh}>
-          <RefreshCw size={16} />
-          새로고침
-        </button>
+        <div className="toolbar-actions">
+          <button className="primary-button" onClick={onRunDemo}>
+            <ArrowRight size={16} />
+            시연 데이터 만들기
+          </button>
+          <button className="secondary-button" onClick={onRefresh}>
+            <RefreshCw size={16} />
+            새로고침
+          </button>
+        </div>
+      </div>
+      <div className="demo-banner">
+        <div>
+          <strong>버튼 한 번으로 입고부터 반품까지</strong>
+          <p>시연 데이터 만들기를 누르면 입고 확정, 적치, 출고 할당, 피킹, 송장 출력, 반품 재고 복구가 실제 API로 실행됩니다.</p>
+        </div>
+        {demoSummary && (
+          <div className="demo-summary">
+            <span>SKU {demoSummary.skuId}</span>
+            <span>가용 {formatCell(demoSummary.availableQty)}</span>
+            <span>할당 {formatCell(demoSummary.allocatedQty)}</span>
+            <span>반품 #{demoSummary.returnOrderId}</span>
+          </div>
+        )}
       </div>
       <div className="flow-guide">
         {[

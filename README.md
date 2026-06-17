@@ -228,7 +228,6 @@ PATCH /api/v1/return-orders/{id}/complete
 
 ## 앞으로 확장할 부분
 
-- 관리자 웹 고도화: 검색 조건, 페이지네이션, 작업자별 할당 화면, 현장용 반응형 화면
 - Android PDA 앱: 입고 실사, 적치, 피킹, 반품 검수
 - DPS 시뮬레이터: 피킹 위치 점등 지시와 작업 확인
 - 송장 PDF 다운로드 및 print-agent 연동

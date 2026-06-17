@@ -14,6 +14,8 @@ import com.warehouse.inbound.service.dto.InboundReceiveRequest;
 import com.warehouse.inventory.domain.ChangeType;
 import com.warehouse.inventory.service.InventoryService;
 import com.warehouse.inventory.service.dto.StockIncreaseCommand;
+import com.warehouse.putaway.service.PutawayService;
+import com.warehouse.putaway.service.dto.PutawayTaskCreateCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,7 @@ public class InboundService {
     private final InboundOrderQueryRepository inboundOrderQueryRepository;
     private final InboundReceiptRepository inboundReceiptRepository;
     private final InventoryService inventoryService;
+    private final PutawayService putawayService;
 
     @Transactional
     public InboundOrderResponse createInboundOrder(InboundOrderCreateRequest request) {
@@ -36,7 +39,7 @@ public class InboundService {
     }
 
     public InboundOrderResponse getInboundOrder(Long id) {
-        return InboundOrderResponse.from(getOrder(id));
+        return InboundOrderResponse.from(getOrderWithItems(id));
     }
 
     @Transactional
@@ -56,23 +59,28 @@ public class InboundService {
         order.confirm();
         order.getItems().stream()
             .filter(item -> item.getReceivedQty() > 0)
-            .forEach(item -> inventoryService.increaseStock(
-                new StockIncreaseCommand(
+            .forEach(item -> {
+                inventoryService.increaseStock(
+                    new StockIncreaseCommand(
+                        order.getWarehouseId(),
+                        item.getSkuId(),
+                        item.getSkuName(),
+                        item.getReceivedQty(),
+                        order.getId()
+                    ),
+                    ChangeType.INBOUND
+                );
+                putawayService.createPutawayTask(new PutawayTaskCreateCommand(
+                    order.getId(),
+                    item.getId(),
                     order.getWarehouseId(),
                     item.getSkuId(),
                     item.getSkuName(),
-                    item.getReceivedQty(),
-                    order.getId()
-                ),
-                ChangeType.INBOUND
-            ));
+                    item.getReceivedQty()
+                ));
+            });
         inboundReceiptRepository.save(InboundReceipt.create(order, request.confirmedBy(), request.memo()));
         return InboundOrderResponse.from(order);
-    }
-
-    private InboundOrder getOrder(Long id) {
-        return inboundOrderRepository.findById(id)
-            .orElseThrow(() -> new BusinessException(ErrorCode.INBOUND_ORDER_NOT_FOUND));
     }
 
     private InboundOrder getOrderWithItems(Long id) {

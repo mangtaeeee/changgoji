@@ -12,6 +12,7 @@ import com.warehouse.inventory.repository.InventoryRepository;
 import com.warehouse.inventory.service.dto.InventoryAdjustRequest;
 import com.warehouse.inventory.service.dto.InventoryResponse;
 import com.warehouse.inventory.service.dto.StockIncreaseCommand;
+import com.warehouse.inventory.service.dto.StockLocationDecreaseCommand;
 import com.warehouse.inventory.service.dto.StockLocationCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -99,6 +100,15 @@ public class InventoryService {
                 InventoryLocation.create(inventory, command.locationCode(), 0)
             ));
         location.increase(command.qty());
+    }
+
+    @Transactional
+    public void decreaseLocationStock(StockLocationDecreaseCommand command) {
+        Inventory inventory = getInventoryEntity(command.warehouseId(), command.skuId());
+        InventoryLocation location = inventoryLocationRepository
+            .findByInventoryIdAndLocationCode(inventory.getId(), command.locationCode())
+            .orElseThrow(() -> new BusinessException(ErrorCode.INSUFFICIENT_STOCK));
+        location.decrease(command.qty());
     }
 
     private Inventory getInventoryEntity(Long warehouseId, Long skuId) {

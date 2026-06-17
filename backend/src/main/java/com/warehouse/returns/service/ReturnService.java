@@ -34,7 +34,7 @@ public class ReturnService {
     }
 
     public ReturnOrderResponse getReturnOrder(Long id) {
-        return ReturnOrderResponse.from(getOrder(id));
+        return ReturnOrderResponse.from(getOrderWithItems(id));
     }
 
     @Transactional
@@ -58,7 +58,7 @@ public class ReturnService {
 
     @Transactional
     public ReturnOrderResponse rejectReturnOrder(Long id) {
-        ReturnOrder order = getOrder(id);
+        ReturnOrder order = getOrderWithItems(id);
         order.reject();
         return ReturnOrderResponse.from(order);
     }
@@ -85,11 +85,6 @@ public class ReturnService {
             .filter(item -> item.getId().equals(returnItemId))
             .findFirst()
             .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT));
-    }
-
-    private ReturnOrder getOrder(Long id) {
-        return returnOrderRepository.findById(id)
-            .orElseThrow(() -> new BusinessException(ErrorCode.RETURN_ORDER_NOT_FOUND));
     }
 
     private ReturnOrder getOrderWithItems(Long id) {

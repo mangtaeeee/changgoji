@@ -9,6 +9,9 @@ import com.warehouse.outbound.repository.OutboundOrderQueryRepository;
 import com.warehouse.outbound.repository.OutboundOrderRepository;
 import com.warehouse.outbound.service.dto.OutboundOrderCreateRequest;
 import com.warehouse.outbound.service.dto.OutboundOrderResponse;
+import com.warehouse.picking.service.PickingService;
+import com.warehouse.picking.service.dto.PickingTaskCreateCommand;
+import com.warehouse.picking.service.dto.PickingWaveCreateCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +24,7 @@ public class OutboundService {
     private final OutboundOrderRepository outboundOrderRepository;
     private final OutboundOrderQueryRepository outboundOrderQueryRepository;
     private final InventoryService inventoryService;
+    private final PickingService pickingService;
 
     @Transactional
     public OutboundOrderResponse createOutboundOrder(OutboundOrderCreateRequest request) {
@@ -30,12 +34,15 @@ public class OutboundService {
     }
 
     public OutboundOrderResponse getOutboundOrder(Long id) {
-        return OutboundOrderResponse.from(getOrder(id));
+        return OutboundOrderResponse.from(getOrderWithItems(id));
     }
 
     @Transactional
     public OutboundOrderResponse allocateOutboundOrder(Long id) {
         OutboundOrder order = getOrderWithItems(id);
+        if (order.getStatus() != OutboundStatus.PENDING) {
+            throw new BusinessException(ErrorCode.INVALID_STATUS);
+        }
         order.getItems().forEach(item -> inventoryService.allocateStock(
             order.getWarehouseId(),
             item.getSkuId(),
@@ -43,6 +50,18 @@ public class OutboundService {
             order.getId()
         ));
         order.allocate();
+        pickingService.createPickingWave(new PickingWaveCreateCommand(
+            order.getWarehouseId(),
+            order.getId(),
+            order.getItems().stream()
+                .map(item -> new PickingTaskCreateCommand(
+                    item.getId(),
+                    item.getSkuId(),
+                    item.getLocationCode(),
+                    item.getRequestedQty()
+                ))
+                .toList()
+        ));
         return OutboundOrderResponse.from(order);
     }
 
@@ -70,11 +89,6 @@ public class OutboundService {
         }
         order.cancel();
         return OutboundOrderResponse.from(order);
-    }
-
-    private OutboundOrder getOrder(Long id) {
-        return outboundOrderRepository.findById(id)
-            .orElseThrow(() -> new BusinessException(ErrorCode.OUTBOUND_ORDER_NOT_FOUND));
     }
 
     private OutboundOrder getOrderWithItems(Long id) {

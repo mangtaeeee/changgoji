@@ -1,5 +1,7 @@
 package com.warehouse.inventory.domain;
 
+import com.warehouse.common.exception.BusinessException;
+import com.warehouse.common.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -48,5 +50,12 @@ public class InventoryLocation {
 
     public void increase(int qty) {
         this.qty += qty;
+    }
+
+    public void decrease(int qty) {
+        if (this.qty < qty) {
+            throw new BusinessException(ErrorCode.INSUFFICIENT_STOCK);
+        }
+        this.qty -= qty;
     }
 }

@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS inventory_location (
     updated_at TIMESTAMP
 );
 
+CREATE INDEX IF NOT EXISTS idx_inventory_location_inventory_location_code
+    ON inventory_location (inventory_id, location_code);
+
 CREATE TABLE IF NOT EXISTS inventory_history (
     id BIGSERIAL PRIMARY KEY,
     inventory_id BIGINT NOT NULL REFERENCES inventory(id),
@@ -100,4 +103,45 @@ CREATE TABLE IF NOT EXISTS return_item (
     requested_qty INTEGER NOT NULL,
     received_qty INTEGER NOT NULL,
     condition VARCHAR(30)
+);
+
+CREATE TABLE IF NOT EXISTS putaway_task (
+    id BIGSERIAL PRIMARY KEY,
+    inbound_order_id BIGINT NOT NULL REFERENCES inbound_order(id),
+    inbound_item_id BIGINT NOT NULL REFERENCES inbound_item(id),
+    warehouse_id BIGINT NOT NULL,
+    sku_id BIGINT NOT NULL,
+    sku_name VARCHAR(255) NOT NULL,
+    qty INTEGER NOT NULL,
+    recommended_location VARCHAR(255) NOT NULL,
+    confirmed_location VARCHAR(255),
+    status VARCHAR(30) NOT NULL,
+    assigned_to BIGINT,
+    created_at TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_putaway_warehouse_status ON putaway_task (warehouse_id, status);
+
+CREATE TABLE IF NOT EXISTS picking_wave (
+    id BIGSERIAL PRIMARY KEY,
+    warehouse_id BIGINT NOT NULL,
+    outbound_order_id BIGINT NOT NULL REFERENCES outbound_order(id),
+    status VARCHAR(30) NOT NULL,
+    created_at TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_picking_wave_warehouse_status ON picking_wave (warehouse_id, status);
+
+CREATE TABLE IF NOT EXISTS picking_task (
+    id BIGSERIAL PRIMARY KEY,
+    wave_id BIGINT NOT NULL REFERENCES picking_wave(id),
+    outbound_item_id BIGINT NOT NULL REFERENCES outbound_item(id),
+    sku_id BIGINT NOT NULL,
+    location_code VARCHAR(255) NOT NULL,
+    qty INTEGER NOT NULL,
+    assigned_to BIGINT,
+    status VARCHAR(30) NOT NULL,
+    picked_at TIMESTAMP
 );

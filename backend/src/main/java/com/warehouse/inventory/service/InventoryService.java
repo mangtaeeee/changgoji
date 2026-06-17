@@ -4,6 +4,7 @@ import com.warehouse.inventory.domain.ChangeType;
 import com.warehouse.inventory.domain.Inventory;
 import com.warehouse.inventory.domain.InventoryHistory;
 import com.warehouse.inventory.domain.InventoryLocation;
+import com.warehouse.inventory.exception.ConcurrentStockUpdateException;
 import com.warehouse.inventory.exception.InsufficientStockException;
 import com.warehouse.inventory.repository.InventoryHistoryRepository;
 import com.warehouse.inventory.repository.InventoryLocationRepository;
@@ -18,6 +19,10 @@ import com.warehouse.inventory.service.dto.StockLocationDecreaseCommand;
 import com.warehouse.inventory.service.dto.StockLocationCommand;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -72,6 +77,7 @@ public class InventoryService {
         saveHistory(inventory, changeType, beforeQty, inventory.getAvailableQty(), command.qty(), command.referenceId());
     }
 
+    @Retryable(retryFor = OptimisticLockingFailureException.class, maxAttempts = 3, backoff = @Backoff(delay = 100))
     @Transactional
     public void allocateStock(Long warehouseId, Long skuId, int qty, Long referenceId) {
         Inventory inventory = getInventoryEntity(warehouseId, skuId);
@@ -80,6 +86,7 @@ public class InventoryService {
         saveHistory(inventory, ChangeType.ALLOCATE, beforeQty, inventory.getAvailableQty(), -qty, referenceId);
     }
 
+    @Retryable(retryFor = OptimisticLockingFailureException.class, maxAttempts = 3, backoff = @Backoff(delay = 100))
     @Transactional
     public void shipStock(Long warehouseId, Long skuId, int qty, Long referenceId) {
         Inventory inventory = getInventoryEntity(warehouseId, skuId);
@@ -88,12 +95,19 @@ public class InventoryService {
         saveHistory(inventory, ChangeType.OUTBOUND, beforeQty, inventory.getAllocatedQty(), -qty, referenceId);
     }
 
+    @Retryable(retryFor = OptimisticLockingFailureException.class, maxAttempts = 3, backoff = @Backoff(delay = 100))
     @Transactional
     public void releaseStock(Long warehouseId, Long skuId, int qty, Long referenceId) {
         Inventory inventory = getInventoryEntity(warehouseId, skuId);
         int beforeQty = inventory.getAvailableQty();
         inventory.release(qty);
         saveHistory(inventory, ChangeType.RELEASE, beforeQty, inventory.getAvailableQty(), qty, referenceId);
+    }
+
+    @Recover
+    public void recoverStockUpdate(OptimisticLockingFailureException e, Long warehouseId, Long skuId, int qty,
+        Long referenceId) {
+        throw new ConcurrentStockUpdateException();
     }
 
     @Transactional

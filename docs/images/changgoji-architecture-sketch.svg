@@ -1,0 +1,130 @@
+<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="paper">
+      <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="3" result="noise"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feBlend in="SourceGraphic" in2="noise" mode="multiply"/>
+    </filter>
+    <filter id="wobble">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="7" result="rough"/>
+      <feDisplacementMap in="SourceGraphic" in2="rough" scale="1.2"/>
+    </filter>
+    <style>
+      .bg { fill: #fffdf7; }
+      .ink { stroke: #1f2937; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .thin { stroke: #1f2937; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+      .dash { stroke-dasharray: 8 9; }
+      .muted { fill: #4b5563; }
+      .title { fill: #111827; font: 700 34px "Pretendard", "Noto Sans KR", Arial, sans-serif; }
+      .sub { fill: #374151; font: 500 18px "Pretendard", "Noto Sans KR", Arial, sans-serif; }
+      .label { fill: #111827; font: 700 21px "Pretendard", "Noto Sans KR", Arial, sans-serif; }
+      .small { fill: #374151; font: 500 15px "Pretendard", "Noto Sans KR", Arial, sans-serif; }
+      .tiny { fill: #4b5563; font: 500 13px "Pretendard", "Noto Sans KR", Arial, sans-serif; }
+      .green { fill: #dff7e8; }
+      .blue { fill: #e6f0ff; }
+      .yellow { fill: #fff3c4; }
+      .red { fill: #ffe2df; }
+      .purple { fill: #efe6ff; }
+      .gray { fill: #f3f4f6; }
+      .white { fill: #ffffff; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1280" height="720"/>
+  <g opacity="0.18" filter="url(#paper)">
+    <path d="M0 64 C180 44 267 84 430 58 C607 30 704 86 874 62 C1044 38 1138 68 1280 48" stroke="#d6d3c7"/>
+    <path d="M0 255 C172 238 276 268 436 246 C620 221 722 271 895 251 C1070 231 1158 258 1280 241" stroke="#d6d3c7"/>
+    <path d="M0 508 C190 485 268 523 437 499 C605 475 709 527 875 504 C1045 480 1142 511 1280 492" stroke="#d6d3c7"/>
+  </g>
+
+  <text x="58" y="58" class="title">창고지기 WMS 아키텍처 스케치</text>
+  <text x="60" y="88" class="sub">입고부터 출고, 반품까지 재고 정합성과 현장 작업 흐름을 분리해서 검증하는 구조</text>
+
+  <g filter="url(#wobble)">
+    <path class="ink" d="M53 117 L1222 111 L1211 660 L69 668 Z" fill="none"/>
+    <path class="thin dash" d="M265 128 L265 644"/>
+    <path class="thin dash" d="M760 128 L760 644"/>
+    <path class="thin dash" d="M1010 128 L1010 644"/>
+  </g>
+
+  <text x="92" y="150" class="small">사용자/운영 도구</text>
+  <text x="394" y="150" class="small">Spring Boot API</text>
+  <text x="827" y="150" class="small">저장소/조회</text>
+  <text x="1062" y="150" class="small">확장 경계</text>
+
+  <g filter="url(#wobble)">
+    <path class="ink white" d="M88 188 L220 181 L228 270 L82 276 Z"/>
+    <path class="ink white" d="M87 320 L225 315 L219 405 L81 411 Z"/>
+    <path class="ink white" d="M86 457 L226 451 L232 540 L78 547 Z"/>
+  </g>
+  <text x="113" y="220" class="label">관리자 웹</text>
+  <text x="104" y="247" class="small">React Console</text>
+  <text x="111" y="352" class="label">Android PDA</text>
+  <text x="102" y="379" class="small">입고/피킹/반품</text>
+  <text x="116" y="489" class="label">Swagger</text>
+  <text x="103" y="516" class="small">API 검증</text>
+
+  <g filter="url(#wobble)">
+    <path class="ink blue" d="M335 194 L690 185 L699 292 L329 301 Z"/>
+    <path class="ink yellow" d="M316 367 L711 359 L718 515 L306 527 Z"/>
+    <path class="thin" d="M365 233 L655 228"/>
+    <path class="thin" d="M348 398 L684 391"/>
+  </g>
+  <text x="364" y="222" class="label">API Layer</text>
+  <text x="488" y="222" class="small">Controller · DTO · Validation · 공통 응답</text>
+  <text x="363" y="261" class="small">GlobalExceptionHandler / Domain Exception / OpenAPI</text>
+
+  <text x="350" y="390" class="label">Domain Services</text>
+  <text x="344" y="426" class="small">Inbound → Inventory 증가 → Putaway 작업</text>
+  <text x="344" y="455" class="small">Outbound → 재고 할당 → Picking Wave → Shipping</text>
+  <text x="344" y="484" class="small">Returns → 검수 결과에 따라 재고 복구 또는 불량 이력</text>
+
+  <g filter="url(#wobble)">
+    <path class="ink green" d="M802 191 L943 185 L951 277 L795 285 Z"/>
+    <path class="ink purple" d="M800 322 L949 315 L958 410 L792 418 Z"/>
+    <path class="ink gray" d="M797 455 L956 449 L948 543 L788 548 Z"/>
+  </g>
+  <text x="826" y="223" class="label">PostgreSQL</text>
+  <text x="822" y="250" class="small">재고/이력/작업</text>
+  <text x="840" y="354" class="label">Redis</text>
+  <text x="820" y="381" class="small">캐시 확장 지점</text>
+  <text x="828" y="488" class="label">QueryDSL</text>
+  <text x="815" y="515" class="small">조회 전용 Projection</text>
+
+  <g filter="url(#wobble)">
+    <path class="ink red" d="M1057 194 L1185 189 L1192 278 L1051 285 Z"/>
+    <path class="ink yellow" d="M1054 339 L1189 334 L1181 421 L1048 427 Z"/>
+    <path class="ink blue" d="M1052 489 L1193 481 L1186 568 L1045 574 Z"/>
+  </g>
+  <text x="1085" y="226" class="label">DPS</text>
+  <text x="1074" y="253" class="small">피킹 점등</text>
+  <text x="1075" y="371" class="label">Print Agent</text>
+  <text x="1072" y="398" class="small">송장 출력</text>
+  <text x="1074" y="522" class="label">MSA 분리</text>
+  <text x="1067" y="549" class="small">도메인 단위</text>
+
+  <g filter="url(#wobble)">
+    <path class="ink" d="M229 228 C266 225 287 226 325 225"/>
+    <path class="ink" d="M229 363 C265 350 285 307 326 266"/>
+    <path class="ink" d="M232 499 C271 484 289 421 309 446"/>
+    <path class="ink" d="M699 242 C739 239 761 233 795 232"/>
+    <path class="ink" d="M711 428 C740 401 765 367 793 366"/>
+    <path class="ink" d="M700 470 C743 484 757 501 789 503"/>
+    <path class="thin dash" d="M951 232 C996 231 1018 230 1051 232"/>
+    <path class="thin dash" d="M958 367 C998 370 1018 379 1048 382"/>
+    <path class="thin dash" d="M948 505 C992 515 1017 530 1045 532"/>
+  </g>
+
+  <g>
+    <path d="M315 216 L330 225 L315 235" class="ink" fill="none"/>
+    <path d="M686 233 L701 242 L686 252" class="ink" fill="none"/>
+    <path d="M781 356 L796 365 L783 376" class="ink" fill="none"/>
+    <path d="M1036 222 L1051 232 L1036 242" class="thin" fill="none"/>
+    <path d="M1033 372 L1048 382 L1032 392" class="thin" fill="none"/>
+  </g>
+
+  <g filter="url(#wobble)">
+    <path class="thin" d="M326 594 C385 570 443 571 505 592 C570 615 640 615 711 586"/>
+  </g>
+  <text x="342" y="606" class="tiny">핵심 기준: 출고 가능 재고와 할당 재고를 분리하고, 모든 변경은 이력으로 남긴다.</text>
+</svg>

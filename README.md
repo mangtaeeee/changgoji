@@ -185,6 +185,17 @@ cd backend
 - 재판매 가능 반품 완료 시 재고 복구
 - 불량 반품 완료 시 재고 복구 없이 불량 이력 기록
 
+## 성능 측정용 시딩
+
+인덱스 성능 비교와 페이지네이션 실측을 위해 `seed` 프로필에서만 동작하는 대량 데이터 시딩 러너를 제공합니다. JPA `save` 루프가 아니라 `JdbcTemplate` batch insert로 `inventory` 10만 행, `inventory_history` 50만 행을 생성합니다.
+
+```powershell
+cd backend
+.\gradlew.bat bootRun --args='--spring.profiles.active=seed'
+```
+
+이미 `inventory` 테이블에 데이터가 있으면 중복 삽입을 막기 위해 시딩을 건너뜁니다.
+
 ## 주요 API 흐름
 
 ### 입고와 적치

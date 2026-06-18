@@ -72,15 +72,15 @@ ON inventory (warehouse_id, sku_id);
 
 #### Query 1 캡처
 
-![Variant A Query 1](../infra/db/explain-images/variant-a-query-1.png)
+![Variant A Query 1](images/explain-images/variant-a-query-1.png)
 
 #### Query 2 캡처
 
-![Variant A Query 2](../infra/db/explain-images/variant-a-query-2.png)
+![Variant A Query 2](images/explain-images/variant-a-query-2.png)
 
 #### Query 3 캡처
 
-![Variant A Query 3](../infra/db/explain-images/variant-a-query-3.png)
+![Variant A Query 3](images/explain-images/variant-a-query-3.png)
 
 ### Variant B: `(sku_id, warehouse_id)`
 
@@ -101,15 +101,15 @@ ON inventory (sku_id, warehouse_id);
 
 #### Query 1 캡처
 
-![Variant B Query 1](../infra/db/explain-images/variant-b-query-1.png)
+![Variant B Query 1](images/explain-images/variant-b-query-1.png)
 
 #### Query 2 캡처
 
-![Variant B Query 2](../infra/db/explain-images/variant-b-query-2.png)
+![Variant B Query 2](images/explain-images/variant-b-query-2.png)
 
 #### Query 3 캡처
 
-![Variant B Query 3](../infra/db/explain-images/variant-b-query-3.png)
+![Variant B Query 3](images/explain-images/variant-b-query-3.png)
 
 ### 한눈에 비교
 

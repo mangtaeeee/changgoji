@@ -127,9 +127,10 @@ availableQty 증가
 
 현재 구현:
 - `Inventory.version` 필드로 충돌 감지
-- `OptimisticLockingFailureException`은 409 응답으로 처리
+- `OptimisticLockingFailureException` 발생 시 최대 3회 재시도
+- 재시도 후에도 실패하면 `ConcurrentStockUpdateException`으로 변환해 409 응답
 
-아직 자동 재시도는 넣지 않았다. 실제 운영 수준으로 올린다면 출고 할당 메서드에 제한된 횟수의 retry를 추가할 계획이다.
+충돌이 항상 실패로 끝나면 현장 작업자는 같은 요청을 다시 눌러야 한다. 그래서 `allocateStock`, `shipStock`, `releaseStock`에는 Spring Retry를 적용했다. 짧은 순간의 버전 충돌은 서버 안에서 한 번 더 시도하고, 3회 모두 실패한 경우에만 명확한 동시성 예외로 응답한다.
 
 ---
 
@@ -337,3 +338,148 @@ BusinessException
 `ErrorCode`에는 코드, 메시지뿐 아니라 HTTP 상태도 같이 둔다. 전역 예외 핸들러는 예외 타입별로 응답 모양을 새로 만들지 않고, `ErrorCode`에 정의된 상태와 메시지를 그대로 사용한다.
 
 이렇게 하면 컨트롤러 응답은 계속 같은 포맷을 유지하면서도, 도메인 내부 코드는 `throw new ShippingLabelNotFoundException()`처럼 읽히게 된다. 나중에 서비스를 분리하더라도 각 도메인 예외 클래스를 해당 서비스로 옮기기 쉽다.
+
+---
+
+## 18. 복합 인덱스는 카디널리티보다 조회 패턴을 기준으로 잡는다
+
+`inventory` 테이블은 창고와 SKU 조합으로 재고를 관리한다.
+
+```
+warehouse_id: 1~5
+sku_id: 1~20000
+```
+
+처음에는 `sku_id`가 훨씬 높은 카디널리티를 가지기 때문에 `(sku_id, warehouse_id)` 순서가 더 좋아 보일 수 있다. 하지만 WMS에서 가장 자주 일어나는 조회는 "특정 SKU가 모든 창고에 얼마나 있는가"보다 "내 창고의 재고 목록을 본다"에 가깝다.
+
+그래서 두 인덱스를 만들어 `EXPLAIN ANALYZE`로 비교했다.
+
+```
+Variant A: (warehouse_id, sku_id)
+Variant B: (sku_id, warehouse_id)
+```
+
+| Query | Variant A | Variant B | 결과 |
+|---|---:|---:|---|
+| 창고 단위 전체 조회 | 2.385ms | 5.672ms | A가 유리 |
+| 창고 + SKU 단건 조회 | 0.068ms | 0.185ms | A가 유리 |
+| SKU 단독 조회 | 3.320ms | 0.392ms | B가 유리 |
+
+창고 단위 조회에서는 `(warehouse_id, sku_id)`가 `Bitmap Heap Scan`으로 실행됐고, `(sku_id, warehouse_id)`는 이번 데이터 분포에서 `Seq Scan`이 선택됐다. `(sku_id, warehouse_id)` 인덱스를 절대 사용할 수 없다는 뜻은 아니다. `warehouse_id = 3` 결과가 전체의 약 20%라 선택도가 낮고, 조건 컬럼이 인덱스 선두가 아니어서 PostgreSQL 옵티마이저가 순차 스캔이 낫다고 판단한 결과다.
+
+결론은 기본 인덱스는 `(warehouse_id, sku_id)`로 유지하는 것이다. 나중에 본사 화면에서 특정 SKU의 창고별 재고를 자주 조회하게 되면, 기존 인덱스를 뒤집기보다 `sku_id` 기준 보조 인덱스를 추가하는 쪽이 낫다. 쓰기 비용이 늘어나므로 실제 조회 빈도를 보고 결정한다.
+
+상세 측정 결과는 `docs/README-explain-analyze.md`에 따로 정리했다.
+
+---
+
+## 19. 창고 단위 재고 조회 — 페이지네이션 적용 전후
+
+### 문제
+
+`EXPLAIN ANALYZE`로는 `(warehouse_id, sku_id)` 인덱스가 적용된 것을 확인했다. 창고 단위 조회는 `Bitmap Heap Scan`으로 실행됐고, 실행 시간은 2.385ms였다.
+
+하지만 같은 API에 k6로 VU 50 부하를 걸자 p95가 7.74초로 측정됐다.
+
+```
+GET /api/v1/inventories?warehouseId={1~5}
+```
+
+### 원인
+
+DB 조회 자체는 빨랐다. 문제는 응답 구조였다.
+
+창고 하나에는 약 20,000건의 재고가 있고, API가 이 목록을 페이지네이션 없이 그대로 JSON으로 직렬화해 응답했다. 요청당 payload가 약 3MB까지 커졌고, VU 50의 동시 요청이 겹치면서 네트워크 전송과 JSON 직렬화 비용이 누적됐다.
+
+### 조치
+
+`GET /inventories` API에 `page`, `size` 페이지네이션을 추가했다.
+
+```
+GET /api/v1/inventories?warehouseId={id}&page=0&size=50
+```
+
+응답은 배열 대신 페이지 메타데이터를 포함하는 객체로 변경했다.
+
+```
+items
+page
+size
+totalElements
+totalPages
+```
+
+`size` 기본값은 50이고, 너무 큰 요청을 막기 위해 최대 200으로 제한했다. 이 변경으로 기존 프론트엔드는 `data`를 바로 배열로 볼 수 없게 되므로 `data.items`를 사용하도록 같이 수정했다.
+
+### 재측정 결과
+
+| 항목 | 페이지네이션 전 | 페이지네이션 후 |
+|---|---:|---:|
+| http_req_duration p95 | 7.74s | 75.72ms |
+| http_req_duration p99 | 10.04s | 132.22ms |
+| data_received | 1.0GB / 30s | 11MB / 30s |
+| threshold | FAIL | PASS |
+
+### 결론
+
+단건 쿼리 성능과 실제 API 체감 성능은 서로 다른 레이어의 문제일 수 있다.
+
+```
+EXPLAIN ANALYZE → DB가 쿼리를 어떻게 실행하는지 확인
+k6              → 실제 API가 사용자에게 얼마나 늦게 응답하는지 확인
+```
+
+인덱스로 DB 조회 병목을 줄였더라도, API가 너무 많은 데이터를 한 번에 내려주면 다른 병목이 생긴다. 이번 경우는 페이지네이션만으로 p95가 7.74초에서 75.72ms로 줄었다. 이후에는 SKU 검색 조건과 위치 필터까지 추가하면 운영 화면에서 필요한 범위만 더 명확히 조회할 수 있다.
+
+---
+
+## 20. 재고 이력 조회는 OFFSET과 Cursor를 둘 다 구현해 비교했다
+
+재고 이력은 시간이 지나면 계속 쌓인다. 처음에는 단순히 최신순 전체 조회만 있었지만, 이력 데이터가 많아지면 화면에서 한 번에 모두 내려줄 수 없다.
+
+그래서 기존 `findHistories(Long inventoryId)`는 유지하고, 비교용 API를 두 개 추가했다.
+
+```
+GET /api/v1/inventories/{id}/history/offset?page={page}&size=20
+GET /api/v1/inventories/{id}/history/cursor?cursor={lastId}&size=20
+```
+
+OFFSET 방식은 구현이 단순하고 원하는 페이지 번호로 바로 이동할 수 있다. 대신 깊은 페이지로 갈수록 앞 데이터를 건너뛰는 비용이 커진다.
+
+Cursor 방식은 마지막으로 본 ID를 기준으로 다음 데이터를 조회한다. 페이지 번호로 바로 이동하기는 어렵지만, "더 보기"나 모바일 목록처럼 이어서 보는 화면에서는 응답시간이 안정적이다.
+
+k6 테스트를 위해 `inventory_id=1`에 이력 120,005건을 넣고 비교했다.
+
+| Depth | OFFSET p95 | Cursor p95 |
+|---:|---:|---:|
+| 0 | 12.16ms | 7.95ms |
+| 100 | 7.77ms | 5.68ms |
+| 1000 | 9.28ms | 4.15ms |
+| 5000 | 20.34ms | 4.25ms |
+
+5000 페이지에서 OFFSET은 p95가 20.34ms까지 올라갔고, Cursor는 4.25ms 수준을 유지했다. 재고 이력처럼 최신순으로 계속 내려보는 화면에는 Cursor 방식이 더 맞다.
+
+---
+
+## 21. 성능 테스트 데이터는 애플리케이션 재시작으로 삭제되면 안 된다
+
+k6 테스트를 하던 중 새로 추가한 이력 페이지네이션 API가 `500`을 반환했다. 처음에는 API 구현 문제로 봤지만, 확인해보니 실행 중이던 `8080` 서버가 예전 코드 상태였다. 최신 코드로 별도 포트에서 띄운 서버는 정상 동작했다.
+
+그 과정에서 더 중요한 문제를 발견했다. 기본 `application.yml`의 JPA 설정이 `ddl-auto=create-drop`이었다.
+
+```
+spring.jpa.hibernate.ddl-auto=create-drop
+```
+
+이 설정은 애플리케이션을 띄우고 내릴 때 테이블을 만들고 삭제한다. 성능 테스트를 위해 seed로 넣은 대량 데이터가 서버 재시작 과정에서 사라질 수 있다. 실제로 `inventory`, `inventory_history`가 비어 있는 것을 확인했다.
+
+그래서 기본 설정을 아래처럼 바꿨다.
+
+```yaml
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+```
+
+스키마 생성은 Docker 초기화 SQL이 맡고, 성능 테스트 데이터는 seed 프로필이 넣는다. 애플리케이션은 스키마가 엔티티와 맞는지만 검증한다. 이렇게 해야 테스트 데이터가 실행 과정에서 사라지지 않고, 스키마 불일치도 빨리 발견할 수 있다.

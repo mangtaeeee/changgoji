@@ -110,9 +110,34 @@
 
 ### 창고 재고 목록 조회
 
-`GET /inventories?warehouseId=1`
+`GET /inventories?warehouseId=1&page=0&size=50`
 
-창고 ID 기준으로 SKU별 재고와 위치별 수량을 조회한다. QueryDSL DTO Projection을 사용한다.
+창고 ID 기준으로 SKU별 재고와 위치별 수량을 페이지 단위로 조회한다. QueryDSL DTO Projection을 사용한다.
+
+- `page` 기본값: 0
+- `size` 기본값: 50
+- `size` 최대값: 200
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "warehouseId": 1,
+      "skuId": 100,
+      "skuName": "상품A",
+      "availableQty": 48,
+      "allocatedQty": 5,
+      "locationCode": "A-01-03",
+      "locationQty": 43
+    }
+  ],
+  "page": 0,
+  "size": 50,
+  "totalElements": 20000,
+  "totalPages": 400
+}
+```
 
 ### SKU별 재고 조회
 

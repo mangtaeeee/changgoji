@@ -11,6 +11,9 @@ import com.warehouse.inventory.service.dto.InventoryHistoryResponse;
 import com.warehouse.inventory.service.dto.InventoryListResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -37,6 +40,36 @@ public class InventoryQueryRepository {
             .where(inventory.warehouseId.eq(warehouseId))
             .orderBy(inventory.skuId.asc(), inventoryLocation.locationCode.asc())
             .fetch();
+    }
+
+    public Page<InventoryListResponse> findInventories(Long warehouseId, Pageable pageable) {
+        List<InventoryListResponse> content = queryFactory
+            .select(Projections.constructor(
+                InventoryListResponse.class,
+                inventory.id,
+                inventory.warehouseId,
+                inventory.skuId,
+                inventory.skuName,
+                inventory.availableQty,
+                inventory.allocatedQty,
+                inventoryLocation.locationCode,
+                inventoryLocation.qty
+            ))
+            .from(inventory)
+            .leftJoin(inventoryLocation).on(inventoryLocation.inventory.id.eq(inventory.id))
+            .where(inventory.warehouseId.eq(warehouseId))
+            .orderBy(inventory.skuId.asc(), inventoryLocation.locationCode.asc())
+            .offset(pageable.getOffset())
+            .limit(pageable.getPageSize())
+            .fetch();
+
+        Long total = queryFactory
+            .select(inventory.count())
+            .from(inventory)
+            .where(inventory.warehouseId.eq(warehouseId))
+            .fetchOne();
+
+        return new PageImpl<>(content, pageable, total == null ? 0 : total);
     }
 
     public List<InventoryHistoryResponse> findHistories(Long inventoryId) {

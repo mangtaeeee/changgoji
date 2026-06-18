@@ -32,6 +32,10 @@ async function api(path, options = {}) {
   return body?.data;
 }
 
+function pageItems(data) {
+  return Array.isArray(data) ? data : data?.items || [];
+}
+
 function todayPlus(days) {
   const date = new Date();
   date.setDate(date.getDate() + days);
@@ -254,7 +258,7 @@ function App() {
       api(`/putaway-tasks?warehouseId=${warehouseId}&status=PENDING`),
       api(`/picking-waves?warehouseId=${warehouseId}&status=OPEN`),
     ]);
-    setInventoryRows(inventories.status === 'fulfilled' ? inventories.value : []);
+    setInventoryRows(inventories.status === 'fulfilled' ? pageItems(inventories.value) : []);
     setPutawayRows(putaways.status === 'fulfilled' ? putaways.value : []);
     setPickingRows(waves.status === 'fulfilled' ? waves.value : []);
   };
@@ -347,7 +351,8 @@ function App() {
     });
     await api(`/return-orders/${returnOrder.id}/complete`, { method: 'PATCH' });
 
-    const inventories = await api(`/inventories?warehouseId=${warehouseId}`);
+    const inventoryPage = await api(`/inventories?warehouseId=${warehouseId}`);
+    const inventories = pageItems(inventoryPage);
     const pendingPutaways = await api(`/putaway-tasks?warehouseId=${warehouseId}&status=PENDING`);
     const openWaves = await api(`/picking-waves?warehouseId=${warehouseId}&status=OPEN`);
     const demoInventory = inventories.find((item) => item.skuId === skuId);
@@ -714,10 +719,11 @@ function InventoryView({ forms, updateForm, run, setInventoryRows, changeTab }) 
         </FormGrid>
         <ActionRow>
           <ActionButton onClick={() => run('재고 목록 조회', async () => {
-            const rows = await api(`/inventories?warehouseId=${form.warehouseId}`);
+            const data = await api(`/inventories?warehouseId=${form.warehouseId}`);
+            const rows = pageItems(data);
             setInventoryRows(rows);
             if (rows?.[0]?.id) updateForm('inventory', 'inventoryId', String(rows[0].id));
-            return rows;
+            return data;
           })}>목록 조회</ActionButton>
           <ActionButton onClick={() => run('SKU 재고 조회', () => api(`/inventories/${form.skuId}?warehouseId=${form.warehouseId}`))}>SKU 조회</ActionButton>
           <ActionButton onClick={() => run('재고 이력 조회', () => api(`/inventories/${form.inventoryId}/history`))}>이력 조회</ActionButton>
@@ -729,10 +735,11 @@ function InventoryView({ forms, updateForm, run, setInventoryRows, changeTab }) 
         buttonLabel="재고 확인하고 적치하기"
         onClick={async () => {
           const data = await run('재고 확인', async () => {
-            const rows = await api(`/inventories?warehouseId=${form.warehouseId}`);
+            const result = await api(`/inventories?warehouseId=${form.warehouseId}`);
+            const rows = pageItems(result);
             setInventoryRows(rows);
             if (rows?.[0]?.id) updateForm('inventory', 'inventoryId', String(rows[0].id));
-            return rows;
+            return result;
           });
           if (data) changeTab('putaway');
         }}

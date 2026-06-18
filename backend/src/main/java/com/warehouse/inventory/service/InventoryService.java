@@ -13,6 +13,7 @@ import com.warehouse.inventory.repository.InventoryRepository;
 import com.warehouse.inventory.service.dto.InventoryAdjustRequest;
 import com.warehouse.inventory.service.dto.InventoryHistoryResponse;
 import com.warehouse.inventory.service.dto.InventoryListResponse;
+import com.warehouse.inventory.service.dto.InventoryPageResponse;
 import com.warehouse.inventory.service.dto.InventoryResponse;
 import com.warehouse.inventory.service.dto.StockIncreaseCommand;
 import com.warehouse.inventory.service.dto.StockLocationDecreaseCommand;
@@ -20,6 +21,8 @@ import com.warehouse.inventory.service.dto.StockLocationCommand;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
@@ -45,8 +48,21 @@ public class InventoryService {
         return inventoryQueryRepository.findInventories(warehouseId);
     }
 
+    public InventoryPageResponse getInventories(Long warehouseId, int page, int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200));
+        return InventoryPageResponse.from(inventoryQueryRepository.findInventories(warehouseId, pageable));
+    }
+
     public List<InventoryHistoryResponse> getInventoryHistories(Long inventoryId) {
         return inventoryQueryRepository.findHistories(inventoryId);
+    }
+
+    public List<InventoryHistoryResponse> getInventoryHistoriesByOffset(Long inventoryId, int page, int size) {
+        return inventoryQueryRepository.findHistoriesByOffset(inventoryId, page, size);
+    }
+
+    public List<InventoryHistoryResponse> getInventoryHistoriesByCursor(Long inventoryId, Long cursor, int size) {
+        return inventoryQueryRepository.findHistoriesByCursor(inventoryId, cursor, size);
     }
 
     @Transactional

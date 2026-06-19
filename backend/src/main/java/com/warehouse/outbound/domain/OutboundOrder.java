@@ -1,5 +1,6 @@
 package com.warehouse.outbound.domain;
 
+import com.warehouse.common.exception.InvalidStatusException;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -70,15 +71,24 @@ public class OutboundOrder {
     }
 
     public void allocate() {
+        if (status != OutboundStatus.PENDING) {
+            throw new InvalidStatusException();
+        }
         this.status = OutboundStatus.ALLOCATED;
     }
 
     public void ship() {
+        if (status != OutboundStatus.ALLOCATED) {
+            throw new InvalidStatusException();
+        }
         this.status = OutboundStatus.SHIPPED;
         this.shippedAt = LocalDateTime.now();
     }
 
     public void cancel() {
+        if (status == OutboundStatus.SHIPPED || status == OutboundStatus.CANCELLED) {
+            throw new InvalidStatusException();
+        }
         this.status = OutboundStatus.CANCELLED;
     }
 }

@@ -1,9 +1,12 @@
 package com.warehouse.outbound.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.warehouse.common.exception.InvalidStatusException;
 import com.warehouse.inventory.service.InventoryService;
 import com.warehouse.outbound.domain.OutboundOrder;
 import com.warehouse.outbound.domain.OutboundStatus;
@@ -66,5 +69,19 @@ class OutboundServiceTest {
         assertThat(command.tasks().get(0).locationCode()).isEqualTo("A-01-03");
         // Then: 출고 지시는 할당 완료 상태가 된다.
         assertThat(order.getStatus()).isEqualTo(OutboundStatus.ALLOCATED);
+    }
+
+    @Test
+    void shipOutboundOrder_throwsWhenOrderIsNotAllocated() {
+        OutboundOrder order = OutboundOrder.create(1L, "ORDER-20260617-001");
+        ReflectionTestUtils.setField(order, "id", 1L);
+        order.addItem(100L, 5, "A-01-03");
+
+        when(outboundOrderQueryRepository.findByIdWithItems(1L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> outboundService.shipOutboundOrder(1L))
+            .isInstanceOf(InvalidStatusException.class);
+
+        verify(inventoryService, never()).shipStock(1L, 100L, 5, 1L);
     }
 }

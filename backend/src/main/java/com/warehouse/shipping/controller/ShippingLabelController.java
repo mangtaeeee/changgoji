@@ -60,7 +60,7 @@ public class ShippingLabelController {
     @PatchMapping("/{id}/failed")
     @Operation(summary = "송장 출력 실패 처리", description = "print-agent가 출력 실패 결과와 사유를 보고하면 FAILED 상태로 변경합니다.")
     public ApiResponse<ShippingLabelResponse> markFailed(@PathVariable Long id,
-        @RequestBody ShippingLabelFailRequest request) {
+        @Valid @RequestBody ShippingLabelFailRequest request) {
         return ApiResponse.success(shippingLabelService.markFailed(id, request));
     }
 }

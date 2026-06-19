@@ -13,6 +13,7 @@ import com.warehouse.returns.repository.ReturnOrderRepository;
 import com.warehouse.returns.service.dto.ReturnOrderCreateRequest;
 import com.warehouse.returns.service.dto.ReturnOrderResponse;
 import com.warehouse.returns.service.dto.ReturnReceiveRequest;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,7 +83,7 @@ public class ReturnService {
 
     private ReturnItem findItem(ReturnOrder order, Long returnItemId) {
         return order.getItems().stream()
-            .filter(item -> item.getId().equals(returnItemId))
+            .filter(item -> Objects.equals(item.getId(), returnItemId))
             .findFirst()
             .orElseThrow(InvalidInputException::new);
     }

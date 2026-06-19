@@ -1,16 +1,22 @@
 package com.warehouse.inbound.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.warehouse.common.exception.InvalidInputException;
+import com.warehouse.common.exception.InvalidStatusException;
 import com.warehouse.inbound.domain.InboundOrder;
 import com.warehouse.inbound.domain.InboundStatus;
 import com.warehouse.inbound.repository.InboundOrderQueryRepository;
 import com.warehouse.inbound.repository.InboundOrderRepository;
 import com.warehouse.inbound.repository.InboundReceiptRepository;
 import com.warehouse.inbound.service.dto.InboundConfirmRequest;
+import com.warehouse.inbound.service.dto.InboundReceiveRequest;
+import com.warehouse.inbound.service.dto.InboundReceivedItemRequest;
 import com.warehouse.inventory.domain.ChangeType;
 import com.warehouse.inventory.service.InventoryService;
 import com.warehouse.inventory.service.dto.StockIncreaseCommand;
@@ -55,6 +61,7 @@ class InboundServiceTest {
         ReflectionTestUtils.setField(order, "id", 1L);
         order.addItem(100L, "상품A", 50);
         ReflectionTestUtils.setField(order.getItems().get(0), "id", 11L);
+        order.startReceiving();
         order.getItems().get(0).receive(48);
 
         when(inboundOrderQueryRepository.findByIdWithItems(1L)).thenReturn(Optional.of(order));
@@ -81,5 +88,37 @@ class InboundServiceTest {
         // Then: 입고 지시는 완료 상태가 되고 입고 확인서가 저장된다.
         assertThat(order.getStatus()).isEqualTo(InboundStatus.COMPLETED);
         verify(inboundReceiptRepository).save(any());
+    }
+
+    @Test
+    void confirmInboundOrder_throwsWhenAlreadyCompleted() {
+        InboundOrder order = InboundOrder.create(1L, 10L, LocalDate.of(2026, 6, 20));
+        ReflectionTestUtils.setField(order, "id", 1L);
+        order.addItem(100L, "상품A", 50);
+        order.startReceiving();
+        order.getItems().get(0).receive(50);
+        order.confirm();
+
+        when(inboundOrderQueryRepository.findByIdWithItems(1L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> inboundService.confirmInboundOrder(1L, new InboundConfirmRequest(999L, "중복 확정")))
+            .isInstanceOf(InvalidStatusException.class);
+
+        verify(inventoryService, never()).increaseStock(any(), any());
+        verify(putawayService, never()).createPutawayTask(any());
+    }
+
+    @Test
+    void receiveInboundOrder_throwsWhenInboundItemDoesNotExist() {
+        InboundOrder order = InboundOrder.create(1L, 10L, LocalDate.of(2026, 6, 20));
+        ReflectionTestUtils.setField(order, "id", 1L);
+        order.addItem(100L, "상품A", 50);
+
+        when(inboundOrderQueryRepository.findByIdWithItems(1L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> inboundService.receiveInboundOrder(
+            1L,
+            new InboundReceiveRequest(java.util.List.of(new InboundReceivedItemRequest(999L, 10)))
+        )).isInstanceOf(InvalidInputException.class);
     }
 }

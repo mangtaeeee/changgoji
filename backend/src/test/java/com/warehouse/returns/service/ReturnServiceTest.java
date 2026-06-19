@@ -1,10 +1,12 @@
 package com.warehouse.returns.service;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.warehouse.common.exception.InvalidStatusException;
 import com.warehouse.inventory.domain.ChangeType;
 import com.warehouse.inventory.service.InventoryService;
 import com.warehouse.inventory.service.dto.StockIncreaseCommand;
@@ -44,6 +46,7 @@ class ReturnServiceTest {
         ReflectionTestUtils.setField(order, "id", 1L);
         order.addItem(100L, "상품A", 2);
         ReflectionTestUtils.setField(order.getItems().get(0), "id", 31L);
+        order.receive();
         order.getItems().get(0).receive(2, ItemCondition.RESELLABLE);
 
         when(returnOrderQueryRepository.findByIdWithItems(1L)).thenReturn(Optional.of(order));
@@ -64,6 +67,7 @@ class ReturnServiceTest {
         ReflectionTestUtils.setField(order, "id", 2L);
         order.addItem(100L, "상품A", 1);
         ReflectionTestUtils.setField(order.getItems().get(0), "id", 32L);
+        order.receive();
         order.getItems().get(0).receive(1, ItemCondition.DEFECTIVE);
 
         when(returnOrderQueryRepository.findByIdWithItems(2L)).thenReturn(Optional.of(order));
@@ -74,5 +78,20 @@ class ReturnServiceTest {
         // Then: 재고 복구는 하지 않고 DEFECTIVE_RETURN 이력 기록만 요청한다.
         verify(inventoryService, never()).increaseStock(any(), any());
         verify(inventoryService).recordDefectiveReturn(1L, 100L, 2L);
+    }
+
+    @Test
+    void completeReturnOrder_throwsWhenAlreadyCompleted() {
+        ReturnOrder order = ReturnOrder.create(1L, 1L, ReturnReason.CUSTOMER_CHANGE);
+        ReflectionTestUtils.setField(order, "id", 3L);
+        order.addItem(100L, "상품A", 2);
+        order.receive();
+        order.getItems().get(0).receive(2, ItemCondition.RESELLABLE);
+        order.complete();
+
+        when(returnOrderQueryRepository.findByIdWithItems(3L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> returnService.completeReturnOrder(3L))
+            .isInstanceOf(InvalidStatusException.class);
     }
 }

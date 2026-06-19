@@ -2,9 +2,9 @@ spring:
   application:
     name: changgoji-backend
   datasource:
-    url: jdbc:postgresql://localhost:5432/changgoji
-    username: changgoji
-    password: changgoji
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/changgoji}
+    username: ${DB_USERNAME:changgoji}
+    password: ${DB_PASSWORD:changgoji}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -13,7 +13,7 @@ spring:
       hibernate:
         format_sql: true
         default_batch_fetch_size: 100
-    show-sql: true
+    show-sql: false
     open-in-view: false
   data:
     redis:
@@ -29,7 +29,14 @@ server:
   port: 8080
 
 springdoc:
-  swagger-ui:
-    path: /swagger-ui.html
   api-docs:
+    enabled: ${SPRINGDOC_ENABLED:false}
     path: /v3/api-docs
+  swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:false}
+    path: /swagger-ui.html
+
+app:
+  security:
+    username: ${APP_SECURITY_USERNAME:admin}
+    password: ${APP_SECURITY_PASSWORD:admin1234!}

@@ -1,6 +1,8 @@
 package com.warehouse.inbound.service;
 
+import com.warehouse.common.exception.InvalidInputException;
 import com.warehouse.inbound.domain.InboundOrder;
+import com.warehouse.inbound.domain.InboundItem;
 import com.warehouse.inbound.domain.InboundReceipt;
 import com.warehouse.inbound.exception.InboundOrderNotFoundException;
 import com.warehouse.inbound.repository.InboundOrderQueryRepository;
@@ -13,6 +15,7 @@ import com.warehouse.inbound.service.dto.InboundReceiveRequest;
 import com.warehouse.inventory.domain.ChangeType;
 import com.warehouse.inventory.service.InventoryService;
 import com.warehouse.inventory.service.dto.StockIncreaseCommand;
+import java.util.Objects;
 import com.warehouse.putaway.service.PutawayService;
 import com.warehouse.putaway.service.dto.PutawayTaskCreateCommand;
 import lombok.RequiredArgsConstructor;
@@ -45,10 +48,7 @@ public class InboundService {
     public InboundOrderResponse receiveInboundOrder(Long id, InboundReceiveRequest request) {
         InboundOrder order = getOrderWithItems(id);
         order.startReceiving();
-        request.items().forEach(received -> order.getItems().stream()
-            .filter(item -> item.getId().equals(received.inboundItemId()))
-            .findFirst()
-            .ifPresent(item -> item.receive(received.receivedQty())));
+        request.items().forEach(received -> findItem(order, received.inboundItemId()).receive(received.receivedQty()));
         return InboundOrderResponse.from(order);
     }
 
@@ -85,5 +85,12 @@ public class InboundService {
     private InboundOrder getOrderWithItems(Long id) {
         return inboundOrderQueryRepository.findByIdWithItems(id)
             .orElseThrow(InboundOrderNotFoundException::new);
+    }
+
+    private InboundItem findItem(InboundOrder order, Long inboundItemId) {
+        return order.getItems().stream()
+            .filter(item -> Objects.equals(item.getId(), inboundItemId))
+            .findFirst()
+            .orElseThrow(() -> new InvalidInputException("입고 품목을 찾을 수 없습니다."));
     }
 }

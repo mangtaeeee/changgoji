@@ -1,5 +1,6 @@
 package com.warehouse.inventory.service;
 
+import com.warehouse.common.exception.InvalidInputException;
 import com.warehouse.inventory.domain.ChangeType;
 import com.warehouse.inventory.domain.Inventory;
 import com.warehouse.inventory.domain.InventoryHistory;
@@ -58,15 +59,16 @@ public class InventoryService {
     }
 
     public List<InventoryHistoryResponse> getInventoryHistoriesByOffset(Long inventoryId, int page, int size) {
-        return inventoryQueryRepository.findHistoriesByOffset(inventoryId, page, size);
+        return inventoryQueryRepository.findHistoriesByOffset(inventoryId, sanitizePage(page), sanitizeHistorySize(size));
     }
 
     public List<InventoryHistoryResponse> getInventoryHistoriesByCursor(Long inventoryId, Long cursor, int size) {
-        return inventoryQueryRepository.findHistoriesByCursor(inventoryId, cursor, size);
+        return inventoryQueryRepository.findHistoriesByCursor(inventoryId, cursor, sanitizeHistorySize(size));
     }
 
     @Transactional
     public InventoryResponse adjustInventory(InventoryAdjustRequest request) {
+        validateAdjustRequest(request);
         Inventory inventory = inventoryRepository.findById(request.inventoryId())
             .orElseThrow(InsufficientStockException::new);
         int beforeQty = inventory.getAvailableQty();
@@ -168,5 +170,22 @@ public class InventoryService {
             changeQty,
             referenceId
         ));
+    }
+
+    private void validateAdjustRequest(InventoryAdjustRequest request) {
+        if (request.adjustQty() == 0) {
+            throw new InvalidInputException("조정 수량은 0일 수 없습니다.");
+        }
+        if (request.reason() == null || request.reason().isBlank()) {
+            throw new InvalidInputException("재고 조정 사유는 필수입니다.");
+        }
+    }
+
+    private int sanitizePage(int page) {
+        return Math.max(page, 0);
+    }
+
+    private int sanitizeHistorySize(int size) {
+        return Math.min(Math.max(size, 1), 100);
     }
 }

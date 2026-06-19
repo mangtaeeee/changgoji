@@ -1,5 +1,6 @@
 package com.warehouse.shipping.domain;
 
+import com.warehouse.common.exception.InvalidStatusException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -75,18 +76,27 @@ public class ShippingLabel {
     }
 
     public void requestPrint() {
+        if (status != ShippingLabelStatus.PENDING && status != ShippingLabelStatus.FAILED) {
+            throw new InvalidStatusException();
+        }
         this.status = ShippingLabelStatus.PRINT_REQUESTED;
         this.printRequestedAt = LocalDateTime.now();
         this.failureReason = null;
     }
 
     public void markPrinted() {
+        if (status != ShippingLabelStatus.PRINT_REQUESTED) {
+            throw new InvalidStatusException();
+        }
         this.status = ShippingLabelStatus.PRINTED;
         this.printedAt = LocalDateTime.now();
         this.failureReason = null;
     }
 
     public void markFailed(String failureReason) {
+        if (status != ShippingLabelStatus.PRINT_REQUESTED) {
+            throw new InvalidStatusException();
+        }
         this.status = ShippingLabelStatus.FAILED;
         this.failureReason = failureReason;
     }

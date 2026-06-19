@@ -1,5 +1,8 @@
 package com.warehouse.shipping.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.warehouse.common.exception.InvalidInputException;
 import com.warehouse.outbound.exception.OutboundOrderNotFoundException;
 import com.warehouse.outbound.repository.OutboundOrderRepository;
 import com.warehouse.shipping.domain.ShippingLabel;
@@ -21,6 +24,7 @@ public class ShippingLabelService {
 
     private final ShippingLabelRepository shippingLabelRepository;
     private final OutboundOrderRepository outboundOrderRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public ShippingLabelResponse createShippingLabel(ShippingLabelCreateRequest request) {
@@ -81,15 +85,27 @@ public class ShippingLabelService {
     }
 
     private String createLabelData(ShippingLabelCreateRequest request, String trackingNo) {
-        return """
-            {"trackingNo":"%s","carrier":"%s","receiverName":"%s","receiverPhone":"%s","receiverAddress":"%s","outboundOrderId":%d}
-            """.formatted(
-            trackingNo,
-            request.carrier(),
-            request.receiverName(),
-            request.receiverPhone(),
-            request.receiverAddress(),
-            request.outboundOrderId()
-        ).trim();
+        try {
+            return objectMapper.writeValueAsString(new ShippingLabelPayload(
+                trackingNo,
+                request.carrier(),
+                request.receiverName(),
+                request.receiverPhone(),
+                request.receiverAddress(),
+                request.outboundOrderId()
+            ));
+        } catch (JsonProcessingException e) {
+            throw new InvalidInputException("송장 데이터를 생성할 수 없습니다.");
+        }
+    }
+
+    private record ShippingLabelPayload(
+        String trackingNo,
+        String carrier,
+        String receiverName,
+        String receiverPhone,
+        String receiverAddress,
+        Long outboundOrderId
+    ) {
     }
 }

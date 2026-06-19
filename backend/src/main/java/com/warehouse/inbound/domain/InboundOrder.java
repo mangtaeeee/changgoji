@@ -1,5 +1,6 @@
 package com.warehouse.inbound.domain;
 
+import com.warehouse.common.exception.InvalidStatusException;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -71,10 +72,16 @@ public class InboundOrder {
     }
 
     public void startReceiving() {
+        if (status != InboundStatus.REQUESTED) {
+            throw new InvalidStatusException();
+        }
         this.status = InboundStatus.RECEIVING;
     }
 
     public void confirm() {
+        if (status != InboundStatus.RECEIVING) {
+            throw new InvalidStatusException();
+        }
         this.status = InboundStatus.COMPLETED;
         this.completedAt = LocalDateTime.now();
     }

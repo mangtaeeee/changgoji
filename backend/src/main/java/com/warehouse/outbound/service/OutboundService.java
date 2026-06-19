@@ -68,6 +68,9 @@ public class OutboundService {
     @Transactional
     public OutboundOrderResponse shipOutboundOrder(Long id) {
         OutboundOrder order = getOrderWithItems(id);
+        if (order.getStatus() != OutboundStatus.ALLOCATED) {
+            throw new InvalidStatusException();
+        }
         order.getItems().forEach(item -> {
             inventoryService.shipStock(order.getWarehouseId(), item.getSkuId(), item.getRequestedQty(), order.getId());
             item.ship();

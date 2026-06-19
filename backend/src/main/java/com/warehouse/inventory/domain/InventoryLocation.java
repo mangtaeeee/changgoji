@@ -1,5 +1,6 @@
 package com.warehouse.inventory.domain;
 
+import com.warehouse.common.exception.InvalidInputException;
 import com.warehouse.inventory.exception.InsufficientStockException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -18,7 +20,10 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 @Getter
 @Entity
-@Table(name = "inventory_location")
+@Table(
+    name = "inventory_location",
+    uniqueConstraints = @UniqueConstraint(name = "uk_inventory_location_inventory_code", columnNames = {"inventory_id", "location_code"})
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class InventoryLocation {
 
@@ -48,13 +53,21 @@ public class InventoryLocation {
     }
 
     public void increase(int qty) {
+        validatePositiveQty(qty);
         this.qty += qty;
     }
 
     public void decrease(int qty) {
+        validatePositiveQty(qty);
         if (this.qty < qty) {
             throw new InsufficientStockException();
         }
         this.qty -= qty;
+    }
+
+    private void validatePositiveQty(int qty) {
+        if (qty <= 0) {
+            throw new InvalidInputException("수량은 1 이상이어야 합니다.");
+        }
     }
 }

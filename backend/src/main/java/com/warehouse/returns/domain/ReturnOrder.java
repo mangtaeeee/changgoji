@@ -1,5 +1,6 @@
 package com.warehouse.returns.domain;
 
+import com.warehouse.common.exception.InvalidStatusException;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -75,15 +76,24 @@ public class ReturnOrder {
     }
 
     public void receive() {
+        if (status != ReturnStatus.REQUESTED) {
+            throw new InvalidStatusException();
+        }
         this.status = ReturnStatus.RECEIVED;
     }
 
     public void complete() {
+        if (status != ReturnStatus.RECEIVED) {
+            throw new InvalidStatusException();
+        }
         this.status = ReturnStatus.COMPLETED;
         this.completedAt = LocalDateTime.now();
     }
 
     public void reject() {
+        if (status == ReturnStatus.COMPLETED || status == ReturnStatus.REJECTED) {
+            throw new InvalidStatusException();
+        }
         this.status = ReturnStatus.REJECTED;
     }
 }
